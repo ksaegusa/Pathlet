@@ -1,0 +1,372 @@
+{
+  "nodes": [
+    {
+      "id": "app-client",
+      "layer": "access"
+    },
+    {
+      "id": "admin-client",
+      "layer": "access"
+    },
+    {
+      "id": "east-edge-a",
+      "layer": "edge"
+    },
+    {
+      "id": "east-edge-b",
+      "layer": "edge"
+    },
+    {
+      "id": "west-edge-a",
+      "layer": "edge"
+    },
+    {
+      "id": "west-edge-b",
+      "layer": "edge"
+    },
+    {
+      "id": "east-core-a",
+      "layer": "core"
+    },
+    {
+      "id": "east-core-b",
+      "layer": "core"
+    },
+    {
+      "id": "west-core-a",
+      "layer": "core"
+    },
+    {
+      "id": "west-core-b",
+      "layer": "core"
+    },
+    {
+      "id": "region-backbone-a",
+      "layer": "core"
+    },
+    {
+      "id": "region-backbone-b",
+      "layer": "core"
+    },
+    {
+      "id": "api-vip",
+      "layer": "service"
+    },
+    {
+      "id": "db-vip",
+      "layer": "service"
+    },
+    {
+      "id": "object-store",
+      "layer": "service"
+    },
+    {
+      "id": "observability",
+      "layer": "service"
+    }
+  ],
+  "interfaces": [
+    {
+      "id": "app-client-eth0",
+      "node_id": "app-client",
+      "ip_address": "10.22.0.1/24"
+    },
+    {
+      "id": "admin-client-eth0",
+      "node_id": "admin-client",
+      "ip_address": "10.22.0.2/24"
+    },
+    {
+      "id": "east-edge-a-eth0",
+      "node_id": "east-edge-a",
+      "ip_address": "10.22.0.3/24"
+    },
+    {
+      "id": "east-edge-b-eth0",
+      "node_id": "east-edge-b",
+      "ip_address": "10.22.0.4/24"
+    },
+    {
+      "id": "west-edge-a-eth0",
+      "node_id": "west-edge-a",
+      "ip_address": "10.22.0.5/24"
+    },
+    {
+      "id": "west-edge-b-eth0",
+      "node_id": "west-edge-b",
+      "ip_address": "10.22.0.6/24"
+    },
+    {
+      "id": "east-core-a-eth0",
+      "node_id": "east-core-a",
+      "ip_address": "10.22.0.7/24"
+    },
+    {
+      "id": "east-core-b-eth0",
+      "node_id": "east-core-b",
+      "ip_address": "10.22.0.8/24"
+    },
+    {
+      "id": "west-core-a-eth0",
+      "node_id": "west-core-a",
+      "ip_address": "10.22.0.9/24"
+    },
+    {
+      "id": "west-core-b-eth0",
+      "node_id": "west-core-b",
+      "ip_address": "10.22.0.10/24"
+    },
+    {
+      "id": "region-backbone-a-eth0",
+      "node_id": "region-backbone-a",
+      "ip_address": "10.22.0.11/24"
+    },
+    {
+      "id": "region-backbone-b-eth0",
+      "node_id": "region-backbone-b",
+      "ip_address": "10.22.0.12/24"
+    },
+    {
+      "id": "api-vip-eth0",
+      "node_id": "api-vip",
+      "ip_address": "10.22.0.13/24"
+    },
+    {
+      "id": "db-vip-eth0",
+      "node_id": "db-vip",
+      "ip_address": "10.22.0.14/24"
+    },
+    {
+      "id": "object-store-eth0",
+      "node_id": "object-store",
+      "ip_address": "10.22.0.15/24"
+    },
+    {
+      "id": "observability-eth0",
+      "node_id": "observability",
+      "ip_address": "10.22.0.16/24"
+    }
+  ],
+  "virtual_ips": [
+    {
+      "id": "api-vip",
+      "protocol": "VRRP",
+      "address": "10.40.0.10",
+      "active_node_id": "east-core-a",
+      "standby_node_ids": [
+        "east-core-b",
+        "west-core-a"
+      ],
+      "service_node_id": "api-vip"
+    },
+    {
+      "id": "db-vip",
+      "protocol": "VRRP",
+      "address": "10.50.0.10",
+      "active_node_id": "west-core-a",
+      "standby_node_ids": [
+        "west-core-b",
+        "east-core-b"
+      ],
+      "service_node_id": "db-vip"
+    }
+  ],
+  "links": [
+    {
+      "id": "app-east-edge-a",
+      "from_interface": "app-client-eth0",
+      "to_interface": "east-edge-a-eth0",
+      "cost": 2,
+      "active": true
+    },
+    {
+      "id": "app-east-edge-b",
+      "from_interface": "app-client-eth0",
+      "to_interface": "east-edge-b-eth0",
+      "cost": 3,
+      "active": true
+    },
+    {
+      "id": "admin-west-edge-a",
+      "from_interface": "admin-client-eth0",
+      "to_interface": "west-edge-a-eth0",
+      "cost": 2,
+      "active": true
+    },
+    {
+      "id": "admin-west-edge-b",
+      "from_interface": "admin-client-eth0",
+      "to_interface": "west-edge-b-eth0",
+      "cost": 3,
+      "active": true
+    },
+    {
+      "id": "east-edge-a-core-a",
+      "from_interface": "east-edge-a-eth0",
+      "to_interface": "east-core-a-eth0",
+      "cost": 2,
+      "active": true
+    },
+    {
+      "id": "east-edge-a-core-b",
+      "from_interface": "east-edge-a-eth0",
+      "to_interface": "east-core-b-eth0",
+      "cost": 3,
+      "active": true
+    },
+    {
+      "id": "east-edge-b-core-a",
+      "from_interface": "east-edge-b-eth0",
+      "to_interface": "east-core-a-eth0",
+      "cost": 3,
+      "active": true
+    },
+    {
+      "id": "east-edge-b-core-b",
+      "from_interface": "east-edge-b-eth0",
+      "to_interface": "east-core-b-eth0",
+      "cost": 2,
+      "active": true
+    },
+    {
+      "id": "west-edge-a-core-a",
+      "from_interface": "west-edge-a-eth0",
+      "to_interface": "west-core-a-eth0",
+      "cost": 2,
+      "active": true
+    },
+    {
+      "id": "west-edge-a-core-b",
+      "from_interface": "west-edge-a-eth0",
+      "to_interface": "west-core-b-eth0",
+      "cost": 3,
+      "active": true
+    },
+    {
+      "id": "west-edge-b-core-a",
+      "from_interface": "west-edge-b-eth0",
+      "to_interface": "west-core-a-eth0",
+      "cost": 3,
+      "active": true
+    },
+    {
+      "id": "west-edge-b-core-b",
+      "from_interface": "west-edge-b-eth0",
+      "to_interface": "west-core-b-eth0",
+      "cost": 2,
+      "active": true
+    },
+    {
+      "id": "east-core-a-b",
+      "from_interface": "east-core-a-eth0",
+      "to_interface": "east-core-b-eth0",
+      "cost": 1,
+      "active": true
+    },
+    {
+      "id": "west-core-a-b",
+      "from_interface": "west-core-a-eth0",
+      "to_interface": "west-core-b-eth0",
+      "cost": 1,
+      "active": true
+    },
+    {
+      "id": "east-a-backbone-a",
+      "from_interface": "east-core-a-eth0",
+      "to_interface": "region-backbone-a-eth0",
+      "cost": 3,
+      "active": true
+    },
+    {
+      "id": "east-b-backbone-b",
+      "from_interface": "east-core-b-eth0",
+      "to_interface": "region-backbone-b-eth0",
+      "cost": 3,
+      "active": true
+    },
+    {
+      "id": "west-a-backbone-a",
+      "from_interface": "west-core-a-eth0",
+      "to_interface": "region-backbone-a-eth0",
+      "cost": 3,
+      "active": true
+    },
+    {
+      "id": "west-b-backbone-b",
+      "from_interface": "west-core-b-eth0",
+      "to_interface": "region-backbone-b-eth0",
+      "cost": 3,
+      "active": true
+    },
+    {
+      "id": "backbone-a-b",
+      "from_interface": "region-backbone-a-eth0",
+      "to_interface": "region-backbone-b-eth0",
+      "cost": 2,
+      "active": true
+    },
+    {
+      "id": "east-a-api-vip",
+      "from_interface": "east-core-a-eth0",
+      "to_interface": "api-vip-eth0",
+      "cost": 1,
+      "active": true
+    },
+    {
+      "id": "east-b-api-vip",
+      "from_interface": "east-core-b-eth0",
+      "to_interface": "api-vip-eth0",
+      "cost": 2,
+      "active": true
+    },
+    {
+      "id": "west-a-api-vip",
+      "from_interface": "west-core-a-eth0",
+      "to_interface": "api-vip-eth0",
+      "cost": 7,
+      "active": true
+    },
+    {
+      "id": "west-a-db-vip",
+      "from_interface": "west-core-a-eth0",
+      "to_interface": "db-vip-eth0",
+      "cost": 1,
+      "active": true
+    },
+    {
+      "id": "west-b-db-vip",
+      "from_interface": "west-core-b-eth0",
+      "to_interface": "db-vip-eth0",
+      "cost": 2,
+      "active": true
+    },
+    {
+      "id": "east-b-db-vip",
+      "from_interface": "east-core-b-eth0",
+      "to_interface": "db-vip-eth0",
+      "cost": 8,
+      "active": true
+    },
+    {
+      "id": "west-b-object-store",
+      "from_interface": "west-core-b-eth0",
+      "to_interface": "object-store-eth0",
+      "cost": 2,
+      "active": true
+    },
+    {
+      "id": "east-a-observability",
+      "from_interface": "east-core-a-eth0",
+      "to_interface": "observability-eth0",
+      "cost": 2,
+      "active": true
+    },
+    {
+      "id": "west-a-observability",
+      "from_interface": "west-core-a-eth0",
+      "to_interface": "observability-eth0",
+      "cost": 4,
+      "active": true
+    }
+  ]
+}

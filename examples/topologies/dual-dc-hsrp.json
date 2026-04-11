@@ -1,0 +1,390 @@
+{
+  "nodes": [
+    {
+      "id": "osaka-office",
+      "layer": "access"
+    },
+    {
+      "id": "tokyo-office",
+      "layer": "access"
+    },
+    {
+      "id": "nagoya-office",
+      "layer": "access"
+    },
+    {
+      "id": "osaka-wan-a",
+      "layer": "edge"
+    },
+    {
+      "id": "osaka-wan-b",
+      "layer": "edge"
+    },
+    {
+      "id": "tokyo-wan-a",
+      "layer": "edge"
+    },
+    {
+      "id": "tokyo-wan-b",
+      "layer": "edge"
+    },
+    {
+      "id": "nagoya-wan-a",
+      "layer": "edge"
+    },
+    {
+      "id": "nagoya-wan-b",
+      "layer": "edge"
+    },
+    {
+      "id": "primary-dc-core-a",
+      "layer": "core"
+    },
+    {
+      "id": "primary-dc-core-b",
+      "layer": "core"
+    },
+    {
+      "id": "dr-dc-core-a",
+      "layer": "core"
+    },
+    {
+      "id": "dr-dc-core-b",
+      "layer": "core"
+    },
+    {
+      "id": "dc-interconnect",
+      "layer": "core"
+    },
+    {
+      "id": "erp-vip",
+      "layer": "service"
+    },
+    {
+      "id": "auth-vip",
+      "layer": "service"
+    },
+    {
+      "id": "file-vip",
+      "layer": "service"
+    },
+    {
+      "id": "monitoring",
+      "layer": "service"
+    }
+  ],
+  "interfaces": [
+    {
+      "id": "osaka-office-eth0",
+      "node_id": "osaka-office",
+      "ip_address": "10.17.0.1/24"
+    },
+    {
+      "id": "tokyo-office-eth0",
+      "node_id": "tokyo-office",
+      "ip_address": "10.17.0.2/24"
+    },
+    {
+      "id": "nagoya-office-eth0",
+      "node_id": "nagoya-office",
+      "ip_address": "10.17.0.3/24"
+    },
+    {
+      "id": "osaka-wan-a-eth0",
+      "node_id": "osaka-wan-a",
+      "ip_address": "10.17.0.4/24"
+    },
+    {
+      "id": "osaka-wan-b-eth0",
+      "node_id": "osaka-wan-b",
+      "ip_address": "10.17.0.5/24"
+    },
+    {
+      "id": "tokyo-wan-a-eth0",
+      "node_id": "tokyo-wan-a",
+      "ip_address": "10.17.0.6/24"
+    },
+    {
+      "id": "tokyo-wan-b-eth0",
+      "node_id": "tokyo-wan-b",
+      "ip_address": "10.17.0.7/24"
+    },
+    {
+      "id": "nagoya-wan-a-eth0",
+      "node_id": "nagoya-wan-a",
+      "ip_address": "10.17.0.8/24"
+    },
+    {
+      "id": "nagoya-wan-b-eth0",
+      "node_id": "nagoya-wan-b",
+      "ip_address": "10.17.0.9/24"
+    },
+    {
+      "id": "primary-dc-core-a-eth0",
+      "node_id": "primary-dc-core-a",
+      "ip_address": "10.17.0.10/24"
+    },
+    {
+      "id": "primary-dc-core-b-eth0",
+      "node_id": "primary-dc-core-b",
+      "ip_address": "10.17.0.11/24"
+    },
+    {
+      "id": "dr-dc-core-a-eth0",
+      "node_id": "dr-dc-core-a",
+      "ip_address": "10.17.0.12/24"
+    },
+    {
+      "id": "dr-dc-core-b-eth0",
+      "node_id": "dr-dc-core-b",
+      "ip_address": "10.17.0.13/24"
+    },
+    {
+      "id": "dc-interconnect-eth0",
+      "node_id": "dc-interconnect",
+      "ip_address": "10.17.0.14/24"
+    },
+    {
+      "id": "erp-vip-eth0",
+      "node_id": "erp-vip",
+      "ip_address": "10.17.0.15/24"
+    },
+    {
+      "id": "auth-vip-eth0",
+      "node_id": "auth-vip",
+      "ip_address": "10.17.0.16/24"
+    },
+    {
+      "id": "file-vip-eth0",
+      "node_id": "file-vip",
+      "ip_address": "10.17.0.17/24"
+    },
+    {
+      "id": "monitoring-eth0",
+      "node_id": "monitoring",
+      "ip_address": "10.17.0.18/24"
+    }
+  ],
+  "virtual_ips": [
+    {
+      "id": "erp-vip",
+      "protocol": "HSRP",
+      "address": "10.10.10.10",
+      "active_node_id": "primary-dc-core-a",
+      "standby_node_ids": [
+        "primary-dc-core-b",
+        "dr-dc-core-a"
+      ],
+      "service_node_id": "erp-vip"
+    },
+    {
+      "id": "auth-vip",
+      "protocol": "HSRP",
+      "address": "10.10.10.20",
+      "active_node_id": "primary-dc-core-b",
+      "standby_node_ids": [
+        "primary-dc-core-a",
+        "dr-dc-core-b"
+      ],
+      "service_node_id": "auth-vip"
+    }
+  ],
+  "links": [
+    {
+      "id": "osaka-office-wan-a",
+      "from_interface": "osaka-office-eth0",
+      "to_interface": "osaka-wan-a-eth0",
+      "cost": 2,
+      "active": true
+    },
+    {
+      "id": "osaka-office-wan-b",
+      "from_interface": "osaka-office-eth0",
+      "to_interface": "osaka-wan-b-eth0",
+      "cost": 3,
+      "active": true
+    },
+    {
+      "id": "tokyo-office-wan-a",
+      "from_interface": "tokyo-office-eth0",
+      "to_interface": "tokyo-wan-a-eth0",
+      "cost": 2,
+      "active": true
+    },
+    {
+      "id": "tokyo-office-wan-b",
+      "from_interface": "tokyo-office-eth0",
+      "to_interface": "tokyo-wan-b-eth0",
+      "cost": 3,
+      "active": true
+    },
+    {
+      "id": "nagoya-office-wan-a",
+      "from_interface": "nagoya-office-eth0",
+      "to_interface": "nagoya-wan-a-eth0",
+      "cost": 3,
+      "active": true
+    },
+    {
+      "id": "nagoya-office-wan-b",
+      "from_interface": "nagoya-office-eth0",
+      "to_interface": "nagoya-wan-b-eth0",
+      "cost": 4,
+      "active": true
+    },
+    {
+      "id": "osaka-wan-a-primary-a",
+      "from_interface": "osaka-wan-a-eth0",
+      "to_interface": "primary-dc-core-a-eth0",
+      "cost": 5,
+      "active": true
+    },
+    {
+      "id": "osaka-wan-b-primary-b",
+      "from_interface": "osaka-wan-b-eth0",
+      "to_interface": "primary-dc-core-b-eth0",
+      "cost": 6,
+      "active": true
+    },
+    {
+      "id": "osaka-wan-a-dr-a",
+      "from_interface": "osaka-wan-a-eth0",
+      "to_interface": "dr-dc-core-a-eth0",
+      "cost": 10,
+      "active": true
+    },
+    {
+      "id": "osaka-wan-b-dr-b",
+      "from_interface": "osaka-wan-b-eth0",
+      "to_interface": "dr-dc-core-b-eth0",
+      "cost": 9,
+      "active": true
+    },
+    {
+      "id": "tokyo-wan-a-primary-a",
+      "from_interface": "tokyo-wan-a-eth0",
+      "to_interface": "primary-dc-core-a-eth0",
+      "cost": 4,
+      "active": true
+    },
+    {
+      "id": "tokyo-wan-b-primary-b",
+      "from_interface": "tokyo-wan-b-eth0",
+      "to_interface": "primary-dc-core-b-eth0",
+      "cost": 5,
+      "active": true
+    },
+    {
+      "id": "nagoya-wan-a-primary-a",
+      "from_interface": "nagoya-wan-a-eth0",
+      "to_interface": "primary-dc-core-a-eth0",
+      "cost": 6,
+      "active": true
+    },
+    {
+      "id": "nagoya-wan-b-primary-b",
+      "from_interface": "nagoya-wan-b-eth0",
+      "to_interface": "primary-dc-core-b-eth0",
+      "cost": 6,
+      "active": true
+    },
+    {
+      "id": "primary-a-primary-b",
+      "from_interface": "primary-dc-core-a-eth0",
+      "to_interface": "primary-dc-core-b-eth0",
+      "cost": 1,
+      "active": true
+    },
+    {
+      "id": "dr-a-dr-b",
+      "from_interface": "dr-dc-core-a-eth0",
+      "to_interface": "dr-dc-core-b-eth0",
+      "cost": 1,
+      "active": true
+    },
+    {
+      "id": "primary-a-dci",
+      "from_interface": "primary-dc-core-a-eth0",
+      "to_interface": "dc-interconnect-eth0",
+      "cost": 3,
+      "active": true
+    },
+    {
+      "id": "primary-b-dci",
+      "from_interface": "primary-dc-core-b-eth0",
+      "to_interface": "dc-interconnect-eth0",
+      "cost": 3,
+      "active": true
+    },
+    {
+      "id": "dr-a-dci",
+      "from_interface": "dr-dc-core-a-eth0",
+      "to_interface": "dc-interconnect-eth0",
+      "cost": 4,
+      "active": true
+    },
+    {
+      "id": "dr-b-dci",
+      "from_interface": "dr-dc-core-b-eth0",
+      "to_interface": "dc-interconnect-eth0",
+      "cost": 4,
+      "active": true
+    },
+    {
+      "id": "primary-a-erp-vip",
+      "from_interface": "primary-dc-core-a-eth0",
+      "to_interface": "erp-vip-eth0",
+      "cost": 1,
+      "active": true
+    },
+    {
+      "id": "primary-b-erp-vip",
+      "from_interface": "primary-dc-core-b-eth0",
+      "to_interface": "erp-vip-eth0",
+      "cost": 2,
+      "active": true
+    },
+    {
+      "id": "dr-a-erp-vip",
+      "from_interface": "dr-dc-core-a-eth0",
+      "to_interface": "erp-vip-eth0",
+      "cost": 8,
+      "active": true
+    },
+    {
+      "id": "primary-b-auth-vip",
+      "from_interface": "primary-dc-core-b-eth0",
+      "to_interface": "auth-vip-eth0",
+      "cost": 1,
+      "active": true
+    },
+    {
+      "id": "primary-a-file-vip",
+      "from_interface": "primary-dc-core-a-eth0",
+      "to_interface": "file-vip-eth0",
+      "cost": 2,
+      "active": true
+    },
+    {
+      "id": "dr-b-file-vip",
+      "from_interface": "dr-dc-core-b-eth0",
+      "to_interface": "file-vip-eth0",
+      "cost": 5,
+      "active": true
+    },
+    {
+      "id": "monitoring-primary-a",
+      "from_interface": "monitoring-eth0",
+      "to_interface": "primary-dc-core-a-eth0",
+      "cost": 2,
+      "active": true
+    },
+    {
+      "id": "monitoring-dr-a",
+      "from_interface": "monitoring-eth0",
+      "to_interface": "dr-dc-core-a-eth0",
+      "cost": 3,
+      "active": true
+    }
+  ]
+}

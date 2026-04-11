@@ -1,0 +1,6 @@
+/target
+/crates/wasm/pkg
+/web/public/wasm
+/web/src/wasm
+/web/node_modules
+/web/dist

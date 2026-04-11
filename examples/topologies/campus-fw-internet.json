@@ -1,0 +1,370 @@
+{
+  "nodes": [
+    {
+      "id": "hq-users",
+      "layer": "access"
+    },
+    {
+      "id": "guest-wifi",
+      "layer": "access"
+    },
+    {
+      "id": "factory-lan",
+      "layer": "access"
+    },
+    {
+      "id": "dist-sw-a",
+      "layer": "edge"
+    },
+    {
+      "id": "dist-sw-b",
+      "layer": "edge"
+    },
+    {
+      "id": "wan-rtr-a",
+      "layer": "edge"
+    },
+    {
+      "id": "wan-rtr-b",
+      "layer": "edge"
+    },
+    {
+      "id": "campus-core-a",
+      "layer": "core"
+    },
+    {
+      "id": "campus-core-b",
+      "layer": "core"
+    },
+    {
+      "id": "fw-a",
+      "layer": "core"
+    },
+    {
+      "id": "fw-b",
+      "layer": "core"
+    },
+    {
+      "id": "internet-edge-a",
+      "layer": "core"
+    },
+    {
+      "id": "internet-edge-b",
+      "layer": "core"
+    },
+    {
+      "id": "proxy-vip",
+      "layer": "service"
+    },
+    {
+      "id": "dns-vip",
+      "layer": "service"
+    },
+    {
+      "id": "internet",
+      "layer": "service"
+    }
+  ],
+  "interfaces": [
+    {
+      "id": "hq-users-eth0",
+      "node_id": "hq-users",
+      "ip_address": "10.23.0.1/24"
+    },
+    {
+      "id": "guest-wifi-eth0",
+      "node_id": "guest-wifi",
+      "ip_address": "10.23.0.2/24"
+    },
+    {
+      "id": "factory-lan-eth0",
+      "node_id": "factory-lan",
+      "ip_address": "10.23.0.3/24"
+    },
+    {
+      "id": "dist-sw-a-eth0",
+      "node_id": "dist-sw-a",
+      "ip_address": "10.23.0.4/24"
+    },
+    {
+      "id": "dist-sw-b-eth0",
+      "node_id": "dist-sw-b",
+      "ip_address": "10.23.0.5/24"
+    },
+    {
+      "id": "wan-rtr-a-eth0",
+      "node_id": "wan-rtr-a",
+      "ip_address": "10.23.0.6/24"
+    },
+    {
+      "id": "wan-rtr-b-eth0",
+      "node_id": "wan-rtr-b",
+      "ip_address": "10.23.0.7/24"
+    },
+    {
+      "id": "campus-core-a-eth0",
+      "node_id": "campus-core-a",
+      "ip_address": "10.23.0.8/24"
+    },
+    {
+      "id": "campus-core-b-eth0",
+      "node_id": "campus-core-b",
+      "ip_address": "10.23.0.9/24"
+    },
+    {
+      "id": "fw-a-eth0",
+      "node_id": "fw-a",
+      "ip_address": "10.23.0.10/24"
+    },
+    {
+      "id": "fw-b-eth0",
+      "node_id": "fw-b",
+      "ip_address": "10.23.0.11/24"
+    },
+    {
+      "id": "internet-edge-a-eth0",
+      "node_id": "internet-edge-a",
+      "ip_address": "10.23.0.12/24"
+    },
+    {
+      "id": "internet-edge-b-eth0",
+      "node_id": "internet-edge-b",
+      "ip_address": "10.23.0.13/24"
+    },
+    {
+      "id": "proxy-vip-eth0",
+      "node_id": "proxy-vip",
+      "ip_address": "10.23.0.14/24"
+    },
+    {
+      "id": "dns-vip-eth0",
+      "node_id": "dns-vip",
+      "ip_address": "10.23.0.15/24"
+    },
+    {
+      "id": "internet-eth0",
+      "node_id": "internet",
+      "ip_address": "10.23.0.16/24"
+    }
+  ],
+  "virtual_ips": [
+    {
+      "id": "proxy-vip",
+      "protocol": "VRRP",
+      "address": "172.16.100.10",
+      "active_node_id": "fw-a",
+      "standby_node_ids": [
+        "fw-b"
+      ],
+      "service_node_id": "proxy-vip"
+    },
+    {
+      "id": "dns-vip",
+      "protocol": "VRRP",
+      "address": "172.16.100.53",
+      "active_node_id": "campus-core-a",
+      "standby_node_ids": [
+        "campus-core-b"
+      ],
+      "service_node_id": "dns-vip"
+    }
+  ],
+  "links": [
+    {
+      "id": "hq-users-dist-a",
+      "from_interface": "hq-users-eth0",
+      "to_interface": "dist-sw-a-eth0",
+      "cost": 1,
+      "active": true
+    },
+    {
+      "id": "hq-users-dist-b",
+      "from_interface": "hq-users-eth0",
+      "to_interface": "dist-sw-b-eth0",
+      "cost": 2,
+      "active": true
+    },
+    {
+      "id": "guest-dist-a",
+      "from_interface": "guest-wifi-eth0",
+      "to_interface": "dist-sw-a-eth0",
+      "cost": 2,
+      "active": true
+    },
+    {
+      "id": "guest-dist-b",
+      "from_interface": "guest-wifi-eth0",
+      "to_interface": "dist-sw-b-eth0",
+      "cost": 2,
+      "active": true
+    },
+    {
+      "id": "factory-dist-a",
+      "from_interface": "factory-lan-eth0",
+      "to_interface": "dist-sw-a-eth0",
+      "cost": 1,
+      "active": true
+    },
+    {
+      "id": "factory-dist-b",
+      "from_interface": "factory-lan-eth0",
+      "to_interface": "dist-sw-b-eth0",
+      "cost": 1,
+      "active": true
+    },
+    {
+      "id": "dist-a-core-a",
+      "from_interface": "dist-sw-a-eth0",
+      "to_interface": "campus-core-a-eth0",
+      "cost": 1,
+      "active": true
+    },
+    {
+      "id": "dist-a-core-b",
+      "from_interface": "dist-sw-a-eth0",
+      "to_interface": "campus-core-b-eth0",
+      "cost": 2,
+      "active": true
+    },
+    {
+      "id": "dist-b-core-a",
+      "from_interface": "dist-sw-b-eth0",
+      "to_interface": "campus-core-a-eth0",
+      "cost": 2,
+      "active": true
+    },
+    {
+      "id": "dist-b-core-b",
+      "from_interface": "dist-sw-b-eth0",
+      "to_interface": "campus-core-b-eth0",
+      "cost": 1,
+      "active": true
+    },
+    {
+      "id": "core-a-core-b",
+      "from_interface": "campus-core-a-eth0",
+      "to_interface": "campus-core-b-eth0",
+      "cost": 1,
+      "active": true
+    },
+    {
+      "id": "core-a-fw-a",
+      "from_interface": "campus-core-a-eth0",
+      "to_interface": "fw-a-eth0",
+      "cost": 2,
+      "active": true
+    },
+    {
+      "id": "core-a-fw-b",
+      "from_interface": "campus-core-a-eth0",
+      "to_interface": "fw-b-eth0",
+      "cost": 4,
+      "active": true
+    },
+    {
+      "id": "core-b-fw-a",
+      "from_interface": "campus-core-b-eth0",
+      "to_interface": "fw-a-eth0",
+      "cost": 4,
+      "active": true
+    },
+    {
+      "id": "core-b-fw-b",
+      "from_interface": "campus-core-b-eth0",
+      "to_interface": "fw-b-eth0",
+      "cost": 2,
+      "active": true
+    },
+    {
+      "id": "fw-a-fw-b",
+      "from_interface": "fw-a-eth0",
+      "to_interface": "fw-b-eth0",
+      "cost": 1,
+      "active": true
+    },
+    {
+      "id": "fw-a-inet-a",
+      "from_interface": "fw-a-eth0",
+      "to_interface": "internet-edge-a-eth0",
+      "cost": 2,
+      "active": true
+    },
+    {
+      "id": "fw-b-inet-b",
+      "from_interface": "fw-b-eth0",
+      "to_interface": "internet-edge-b-eth0",
+      "cost": 2,
+      "active": true
+    },
+    {
+      "id": "inet-a-inet-b",
+      "from_interface": "internet-edge-a-eth0",
+      "to_interface": "internet-edge-b-eth0",
+      "cost": 2,
+      "active": true
+    },
+    {
+      "id": "inet-a-internet",
+      "from_interface": "internet-edge-a-eth0",
+      "to_interface": "internet-eth0",
+      "cost": 5,
+      "active": true
+    },
+    {
+      "id": "inet-b-internet",
+      "from_interface": "internet-edge-b-eth0",
+      "to_interface": "internet-eth0",
+      "cost": 5,
+      "active": true
+    },
+    {
+      "id": "fw-a-proxy-vip",
+      "from_interface": "fw-a-eth0",
+      "to_interface": "proxy-vip-eth0",
+      "cost": 1,
+      "active": true
+    },
+    {
+      "id": "fw-b-proxy-vip",
+      "from_interface": "fw-b-eth0",
+      "to_interface": "proxy-vip-eth0",
+      "cost": 2,
+      "active": true
+    },
+    {
+      "id": "core-a-dns-vip",
+      "from_interface": "campus-core-a-eth0",
+      "to_interface": "dns-vip-eth0",
+      "cost": 1,
+      "active": true
+    },
+    {
+      "id": "core-b-dns-vip",
+      "from_interface": "campus-core-b-eth0",
+      "to_interface": "dns-vip-eth0",
+      "cost": 2,
+      "active": true
+    },
+    {
+      "id": "core-a-wan-a",
+      "from_interface": "campus-core-a-eth0",
+      "to_interface": "wan-rtr-a-eth0",
+      "cost": 2,
+      "active": true
+    },
+    {
+      "id": "core-b-wan-b",
+      "from_interface": "campus-core-b-eth0",
+      "to_interface": "wan-rtr-b-eth0",
+      "cost": 2,
+      "active": true
+    },
+    {
+      "id": "wan-a-wan-b",
+      "from_interface": "wan-rtr-a-eth0",
+      "to_interface": "wan-rtr-b-eth0",
+      "cost": 2,
+      "active": true
+    }
+  ]
+}
