@@ -40,7 +40,7 @@ fn parse_input_path(args: &[String]) -> Result<&str, String> {
 }
 
 fn print_usage() {
-    eprintln!("usage: pathlet route --input <request.json>");
+    eprintln!("usage: pathlet route --input <request.json|request.yaml>");
 }
 
 #[cfg(test)]
@@ -49,9 +49,9 @@ mod tests {
 
     #[test]
     fn parses_explicit_input_flag() {
-        let args = vec!["route".into(), "--input".into(), "request.json".into()];
+        let args = vec!["route".into(), "--input".into(), "request.yaml".into()];
 
-        assert_eq!(parse_input_path(&args), Ok("request.json"));
+        assert_eq!(parse_input_path(&args), Ok("request.yaml"));
     }
 
     #[test]

@@ -348,155 +348,677 @@
       "id": "app-east-edge-a",
       "from_interface": "app-client-app-east-edge-a-if",
       "to_interface": "east-edge-a-app-east-edge-a-if",
-      "cost": 2,
-      "active": true
+      "cost": 100,
+      "active": true,
+      "bandwidth_mbps": 1000
     },
     {
       "id": "app-east-edge-b",
       "from_interface": "app-client-app-east-edge-b-if",
       "to_interface": "east-edge-b-app-east-edge-b-if",
-      "cost": 3,
-      "active": true
+      "cost": 100,
+      "active": true,
+      "bandwidth_mbps": 1000
     },
     {
       "id": "admin-west-edge-a",
       "from_interface": "admin-client-admin-west-edge-a-if",
       "to_interface": "west-edge-a-admin-west-edge-a-if",
-      "cost": 2,
-      "active": true
+      "cost": 100,
+      "active": true,
+      "bandwidth_mbps": 1000
     },
     {
       "id": "admin-west-edge-b",
       "from_interface": "admin-client-admin-west-edge-b-if",
       "to_interface": "west-edge-b-admin-west-edge-b-if",
-      "cost": 3,
-      "active": true
+      "cost": 100,
+      "active": true,
+      "bandwidth_mbps": 1000
     },
     {
       "id": "east-edge-a-core-a",
       "from_interface": "east-edge-a-east-edge-a-core-a-if",
       "to_interface": "east-core-a-east-edge-a-core-a-if",
-      "cost": 2,
-      "active": true
+      "cost": 3,
+      "active": true,
+      "bandwidth_mbps": 40000
     },
     {
       "id": "east-edge-a-core-b",
       "from_interface": "east-edge-a-east-edge-a-core-b-if",
       "to_interface": "east-core-b-east-edge-a-core-b-if",
       "cost": 3,
-      "active": true
+      "active": true,
+      "bandwidth_mbps": 40000
     },
     {
       "id": "east-edge-b-core-a",
       "from_interface": "east-edge-b-east-edge-b-core-a-if",
       "to_interface": "east-core-a-east-edge-b-core-a-if",
       "cost": 3,
-      "active": true
+      "active": true,
+      "bandwidth_mbps": 40000
     },
     {
       "id": "east-edge-b-core-b",
       "from_interface": "east-edge-b-east-edge-b-core-b-if",
       "to_interface": "east-core-b-east-edge-b-core-b-if",
-      "cost": 2,
-      "active": true
+      "cost": 3,
+      "active": true,
+      "bandwidth_mbps": 40000
     },
     {
       "id": "west-edge-a-core-a",
       "from_interface": "west-edge-a-west-edge-a-core-a-if",
       "to_interface": "west-core-a-west-edge-a-core-a-if",
-      "cost": 2,
-      "active": true
+      "cost": 3,
+      "active": true,
+      "bandwidth_mbps": 40000
     },
     {
       "id": "west-edge-a-core-b",
       "from_interface": "west-edge-a-west-edge-a-core-b-if",
       "to_interface": "west-core-b-west-edge-a-core-b-if",
       "cost": 3,
-      "active": true
+      "active": true,
+      "bandwidth_mbps": 40000
     },
     {
       "id": "west-edge-b-core-a",
       "from_interface": "west-edge-b-west-edge-b-core-a-if",
       "to_interface": "west-core-a-west-edge-b-core-a-if",
       "cost": 3,
-      "active": true
+      "active": true,
+      "bandwidth_mbps": 40000
     },
     {
       "id": "west-edge-b-core-b",
       "from_interface": "west-edge-b-west-edge-b-core-b-if",
       "to_interface": "west-core-b-west-edge-b-core-b-if",
-      "cost": 2,
-      "active": true
+      "cost": 3,
+      "active": true,
+      "bandwidth_mbps": 40000
     },
     {
       "id": "east-core-a-b",
       "from_interface": "east-core-a-east-core-a-b-if",
       "to_interface": "east-core-b-east-core-a-b-if",
       "cost": 1,
-      "active": true
+      "active": true,
+      "bandwidth_mbps": 100000
     },
     {
       "id": "west-core-a-b",
       "from_interface": "west-core-a-west-core-a-b-if",
       "to_interface": "west-core-b-west-core-a-b-if",
       "cost": 1,
-      "active": true
+      "active": true,
+      "bandwidth_mbps": 100000
     },
     {
       "id": "east-a-backbone-a",
       "from_interface": "east-core-a-east-a-backbone-a-if",
       "to_interface": "region-backbone-a-east-a-backbone-a-if",
       "cost": 3,
-      "active": true
+      "active": true,
+      "bandwidth_mbps": 40000
     },
     {
       "id": "east-b-backbone-b",
       "from_interface": "east-core-b-east-b-backbone-b-if",
       "to_interface": "region-backbone-b-east-b-backbone-b-if",
       "cost": 3,
-      "active": true
+      "active": true,
+      "bandwidth_mbps": 40000
     },
     {
       "id": "west-a-backbone-a",
       "from_interface": "west-core-a-west-a-backbone-a-if",
       "to_interface": "region-backbone-a-west-a-backbone-a-if",
       "cost": 3,
-      "active": true
+      "active": true,
+      "bandwidth_mbps": 40000
     },
     {
       "id": "west-b-backbone-b",
       "from_interface": "west-core-b-west-b-backbone-b-if",
       "to_interface": "region-backbone-b-west-b-backbone-b-if",
       "cost": 3,
-      "active": true
+      "active": true,
+      "bandwidth_mbps": 40000
     },
     {
       "id": "backbone-a-b",
       "from_interface": "region-backbone-a-backbone-a-b-if",
       "to_interface": "region-backbone-b-backbone-a-b-if",
-      "cost": 2,
-      "active": true
+      "cost": 1,
+      "active": true,
+      "bandwidth_mbps": 100000
     },
     {
       "id": "west-b-object-store",
       "from_interface": "west-core-b-west-b-object-store-if",
       "to_interface": "object-store-west-b-object-store-if",
-      "cost": 2,
-      "active": true
+      "cost": 3,
+      "active": true,
+      "bandwidth_mbps": 40000
     },
     {
       "id": "east-a-observability",
       "from_interface": "east-core-a-east-a-observability-if",
       "to_interface": "observability-east-a-observability-if",
-      "cost": 2,
-      "active": true
+      "cost": 3,
+      "active": true,
+      "bandwidth_mbps": 40000
     },
     {
       "id": "west-a-observability",
       "from_interface": "west-core-a-west-a-observability-if",
       "to_interface": "observability-west-a-observability-if",
-      "cost": 4,
-      "active": true
+      "cost": 3,
+      "active": true,
+      "bandwidth_mbps": 40000
+    }
+  ],
+  "routing": [
+    {
+      "node_id": "app-client",
+      "routing": {
+        "control_plane_protocols": [
+          {
+            "type": "static",
+            "name": "static",
+            "static_routes": {
+              "ipv4": [
+                {
+                  "name": "app-client-default-a",
+                  "destination_prefix": "0.0.0.0/0",
+                  "next_hop": {
+                    "next_hop_node": "east-edge-a",
+                    "outgoing_interface": "app-client-app-east-edge-a-if"
+                  },
+                  "metric": 10,
+                  "administrative_distance": 1,
+                  "vrf_id": "app",
+                  "vlan_id": 110,
+                  "active": true
+                },
+                {
+                  "name": "app-client-default-b",
+                  "destination_prefix": "0.0.0.0/0",
+                  "next_hop": {
+                    "next_hop_node": "east-edge-b",
+                    "outgoing_interface": "app-client-app-east-edge-b-if"
+                  },
+                  "metric": 20,
+                  "administrative_distance": 1,
+                  "vrf_id": "app",
+                  "vlan_id": 110,
+                  "active": true
+                }
+              ]
+            }
+          }
+        ]
+      }
+    },
+    {
+      "node_id": "admin-client",
+      "routing": {
+        "control_plane_protocols": [
+          {
+            "type": "static",
+            "name": "static",
+            "static_routes": {
+              "ipv4": [
+                {
+                  "name": "admin-client-default-a",
+                  "destination_prefix": "0.0.0.0/0",
+                  "next_hop": {
+                    "next_hop_node": "west-edge-a",
+                    "outgoing_interface": "admin-client-admin-west-edge-a-if"
+                  },
+                  "metric": 10,
+                  "administrative_distance": 1,
+                  "vrf_id": "admin",
+                  "vlan_id": 120,
+                  "active": true
+                },
+                {
+                  "name": "admin-client-default-b",
+                  "destination_prefix": "0.0.0.0/0",
+                  "next_hop": {
+                    "next_hop_node": "west-edge-b",
+                    "outgoing_interface": "admin-client-admin-west-edge-b-if"
+                  },
+                  "metric": 20,
+                  "administrative_distance": 1,
+                  "vrf_id": "admin",
+                  "vlan_id": 120,
+                  "active": true
+                }
+              ]
+            }
+          }
+        ]
+      }
+    },
+    {
+      "node_id": "east-edge-a",
+      "routing": {
+        "control_plane_protocols": [
+          {
+            "type": "static",
+            "name": "static",
+            "static_routes": {
+              "ipv4": [
+                {
+                  "name": "east-edge-a-to-api-vip",
+                  "destination_prefix": "east-core-a",
+                  "next_hop": {
+                    "next_hop_node": "east-core-a",
+                    "outgoing_interface": "east-edge-a-east-edge-a-core-a-if"
+                  },
+                  "metric": 10,
+                  "administrative_distance": 1,
+                  "vrf_id": "app",
+                  "active": true
+                },
+                {
+                  "name": "east-edge-a-to-db-vip",
+                  "destination_prefix": "west-core-a",
+                  "next_hop": {
+                    "next_hop_node": "east-core-a",
+                    "outgoing_interface": "east-edge-a-east-edge-a-core-a-if"
+                  },
+                  "metric": 20,
+                  "administrative_distance": 1,
+                  "vrf_id": "app",
+                  "active": true
+                }
+              ]
+            }
+          }
+        ]
+      }
+    },
+    {
+      "node_id": "east-edge-b",
+      "routing": {
+        "control_plane_protocols": [
+          {
+            "type": "static",
+            "name": "static",
+            "static_routes": {
+              "ipv4": [
+                {
+                  "name": "east-edge-b-to-api-vip",
+                  "destination_prefix": "east-core-a",
+                  "next_hop": {
+                    "next_hop_node": "east-core-a",
+                    "outgoing_interface": "east-edge-b-east-edge-b-core-a-if"
+                  },
+                  "metric": 10,
+                  "administrative_distance": 1,
+                  "vrf_id": "app",
+                  "active": true
+                },
+                {
+                  "name": "east-edge-b-to-db-vip",
+                  "destination_prefix": "west-core-a",
+                  "next_hop": {
+                    "next_hop_node": "east-core-b",
+                    "outgoing_interface": "east-edge-b-east-edge-b-core-b-if"
+                  },
+                  "metric": 20,
+                  "administrative_distance": 1,
+                  "vrf_id": "app",
+                  "active": true
+                }
+              ]
+            }
+          }
+        ]
+      }
+    },
+    {
+      "node_id": "west-edge-a",
+      "routing": {
+        "control_plane_protocols": [
+          {
+            "type": "static",
+            "name": "static",
+            "static_routes": {
+              "ipv4": [
+                {
+                  "name": "west-edge-a-to-db-vip",
+                  "destination_prefix": "west-core-a",
+                  "next_hop": {
+                    "next_hop_node": "west-core-a",
+                    "outgoing_interface": "west-edge-a-west-edge-a-core-a-if"
+                  },
+                  "metric": 10,
+                  "administrative_distance": 1,
+                  "vrf_id": "admin",
+                  "active": true
+                }
+              ]
+            }
+          }
+        ]
+      }
+    },
+    {
+      "node_id": "west-edge-b",
+      "routing": {
+        "control_plane_protocols": [
+          {
+            "type": "static",
+            "name": "static",
+            "static_routes": {
+              "ipv4": [
+                {
+                  "name": "west-edge-b-to-db-vip",
+                  "destination_prefix": "west-core-a",
+                  "next_hop": {
+                    "next_hop_node": "west-core-a",
+                    "outgoing_interface": "west-edge-b-west-edge-b-core-a-if"
+                  },
+                  "metric": 10,
+                  "administrative_distance": 1,
+                  "vrf_id": "admin",
+                  "active": true
+                }
+              ]
+            }
+          }
+        ]
+      }
+    },
+    {
+      "node_id": "east-core-a",
+      "routing": {
+        "control_plane_protocols": [
+          {
+            "type": "static",
+            "name": "static",
+            "static_routes": {
+              "ipv4": [
+                {
+                  "name": "east-core-a-to-db-vip",
+                  "destination_prefix": "west-core-a",
+                  "next_hop": {
+                    "next_hop_node": "region-backbone-a",
+                    "outgoing_interface": "east-core-a-east-a-backbone-a-if"
+                  },
+                  "metric": 20,
+                  "administrative_distance": 1,
+                  "vrf_id": "app",
+                  "active": true
+                },
+                {
+                  "name": "east-core-a-to-object-store",
+                  "destination_prefix": "object-store",
+                  "next_hop": {
+                    "next_hop_node": "region-backbone-a",
+                    "outgoing_interface": "east-core-a-east-a-backbone-a-if"
+                  },
+                  "metric": 25,
+                  "administrative_distance": 1,
+                  "vrf_id": "app",
+                  "active": true
+                }
+              ]
+            }
+          }
+        ]
+      }
+    },
+    {
+      "node_id": "east-core-b",
+      "routing": {
+        "control_plane_protocols": [
+          {
+            "type": "static",
+            "name": "static",
+            "static_routes": {
+              "ipv4": [
+                {
+                  "name": "east-core-b-to-db-vip",
+                  "destination_prefix": "west-core-a",
+                  "next_hop": {
+                    "next_hop_node": "region-backbone-b",
+                    "outgoing_interface": "east-core-b-east-b-backbone-b-if"
+                  },
+                  "metric": 20,
+                  "administrative_distance": 1,
+                  "vrf_id": "app",
+                  "active": true
+                }
+              ]
+            }
+          }
+        ]
+      }
+    },
+    {
+      "node_id": "region-backbone-a",
+      "routing": {
+        "control_plane_protocols": [
+          {
+            "type": "static",
+            "name": "static",
+            "static_routes": {
+              "ipv4": [
+                {
+                  "name": "backbone-a-to-db-vip",
+                  "destination_prefix": "west-core-a",
+                  "next_hop": {
+                    "next_hop_node": "west-core-a",
+                    "outgoing_interface": "region-backbone-a-west-a-backbone-a-if"
+                  },
+                  "metric": 10,
+                  "administrative_distance": 1,
+                  "vrf_id": "app",
+                  "active": true
+                },
+                {
+                  "name": "backbone-a-to-object-store",
+                  "destination_prefix": "object-store",
+                  "next_hop": {
+                    "next_hop_node": "west-core-a",
+                    "outgoing_interface": "region-backbone-a-west-a-backbone-a-if"
+                  },
+                  "metric": 15,
+                  "administrative_distance": 1,
+                  "vrf_id": "app",
+                  "active": true
+                }
+              ]
+            }
+          }
+        ]
+      }
+    },
+    {
+      "node_id": "region-backbone-b",
+      "routing": {
+        "control_plane_protocols": [
+          {
+            "type": "static",
+            "name": "static",
+            "static_routes": {
+              "ipv4": [
+                {
+                  "name": "backbone-b-to-db-vip",
+                  "destination_prefix": "west-core-a",
+                  "next_hop": {
+                    "next_hop_node": "region-backbone-a",
+                    "outgoing_interface": "region-backbone-b-backbone-a-b-if"
+                  },
+                  "metric": 15,
+                  "administrative_distance": 1,
+                  "vrf_id": "app",
+                  "active": true
+                }
+              ]
+            }
+          }
+        ]
+      }
+    },
+    {
+      "node_id": "west-core-a",
+      "routing": {
+        "control_plane_protocols": [
+          {
+            "type": "static",
+            "name": "static",
+            "static_routes": {
+              "ipv4": [
+                {
+                  "name": "west-core-a-to-object-store",
+                  "destination_prefix": "object-store",
+                  "next_hop": {
+                    "next_hop_node": "west-core-b",
+                    "outgoing_interface": "west-core-a-west-core-a-b-if"
+                  },
+                  "metric": 10,
+                  "administrative_distance": 1,
+                  "vrf_id": "app",
+                  "active": true
+                }
+              ]
+            }
+          }
+        ]
+      }
+    },
+    {
+      "node_id": "west-core-b",
+      "routing": {
+        "control_plane_protocols": [
+          {
+            "type": "static",
+            "name": "static",
+            "static_routes": {
+              "ipv4": [
+                {
+                  "name": "west-core-b-to-db-vip",
+                  "destination_prefix": "west-core-a",
+                  "next_hop": {
+                    "next_hop_node": "west-core-a",
+                    "outgoing_interface": "west-core-b-west-core-a-b-if"
+                  },
+                  "metric": 5,
+                  "administrative_distance": 1,
+                  "vrf_id": "app",
+                  "active": true
+                },
+                {
+                  "name": "west-core-b-to-object-store",
+                  "destination_prefix": "object-store",
+                  "next_hop": {
+                    "next_hop_node": "object-store",
+                    "outgoing_interface": "west-core-b-west-b-object-store-if"
+                  },
+                  "metric": 5,
+                  "administrative_distance": 1,
+                  "vrf_id": "app",
+                  "active": true
+                }
+              ]
+            }
+          }
+        ]
+      }
+    }
+  ],
+  "acls": [
+    {
+      "name": "west-core-a-ingress",
+      "type": "ipv4-acl",
+      "aces": [
+        {
+          "name": "allow-https-to-db-vip",
+          "active": true,
+          "matches": {
+            "ipv4": {
+              "source_ipv4_network": "10.1.0.1/32",
+              "destination_ipv4_network": "10.50.0.10/32"
+            },
+            "tcp": {
+              "destination_port": {
+                "operator": "eq",
+                "port": 443
+              }
+            }
+          },
+          "actions": {
+            "forwarding": "accept"
+          }
+        },
+        {
+          "name": "default-deny",
+          "active": true,
+          "matches": {
+            "ipv4": {}
+          },
+          "actions": {
+            "forwarding": "drop"
+          }
+        }
+      ]
+    },
+    {
+      "name": "east-core-a-ingress",
+      "type": "ipv4-acl",
+      "aces": [
+        {
+          "name": "allow-https-to-api-vip",
+          "active": true,
+          "matches": {
+            "ipv4": {
+              "source_ipv4_network": "10.0.0.0/8",
+              "destination_ipv4_network": "10.40.0.10/32"
+            },
+            "tcp": {
+              "destination_port": {
+                "operator": "eq",
+                "port": 443
+              }
+            }
+          },
+          "actions": {
+            "forwarding": "accept"
+          }
+        },
+        {
+          "name": "default-deny",
+          "active": true,
+          "matches": {
+            "ipv4": {}
+          },
+          "actions": {
+            "forwarding": "drop"
+          }
+        }
+      ]
+    }
+  ],
+  "acl_attachments": [
+    {
+      "node_id": "west-core-a",
+      "ingress": [
+        "west-core-a-ingress"
+      ]
+    },
+    {
+      "node_id": "east-core-a",
+      "ingress": [
+        "east-core-a-ingress"
+      ]
     }
   ]
 }
