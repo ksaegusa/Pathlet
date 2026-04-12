@@ -96,9 +96,8 @@ fn serve_request(request: tiny_http::Request) {
     };
 
     let Some(file) = file else {
-        let _ = request.respond(
-            Response::from_string("not found").with_status_code(StatusCode(404)),
-        );
+        let _ =
+            request.respond(Response::from_string("not found").with_status_code(StatusCode(404)));
         return;
     };
 

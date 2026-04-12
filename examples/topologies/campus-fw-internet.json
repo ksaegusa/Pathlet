@@ -53,98 +53,280 @@
       "layer": "core"
     },
     {
-      "id": "proxy-vip",
-      "layer": "service"
-    },
-    {
-      "id": "dns-vip",
-      "layer": "service"
-    },
-    {
       "id": "internet",
       "layer": "service"
     }
   ],
   "interfaces": [
     {
-      "id": "hq-users-eth0",
+      "id": "hq-users-hq-users-dist-a-if",
       "node_id": "hq-users",
-      "ip_address": "10.23.0.1/24"
+      "ip_address": "10.1.0.1/30"
     },
     {
-      "id": "guest-wifi-eth0",
-      "node_id": "guest-wifi",
-      "ip_address": "10.23.0.2/24"
-    },
-    {
-      "id": "factory-lan-eth0",
-      "node_id": "factory-lan",
-      "ip_address": "10.23.0.3/24"
-    },
-    {
-      "id": "dist-sw-a-eth0",
+      "id": "dist-sw-a-hq-users-dist-a-if",
       "node_id": "dist-sw-a",
-      "ip_address": "10.23.0.4/24"
+      "ip_address": "10.1.0.2/30"
     },
     {
-      "id": "dist-sw-b-eth0",
+      "id": "hq-users-hq-users-dist-b-if",
+      "node_id": "hq-users",
+      "ip_address": "10.2.0.1/30"
+    },
+    {
+      "id": "dist-sw-b-hq-users-dist-b-if",
       "node_id": "dist-sw-b",
-      "ip_address": "10.23.0.5/24"
+      "ip_address": "10.2.0.2/30"
     },
     {
-      "id": "wan-rtr-a-eth0",
-      "node_id": "wan-rtr-a",
-      "ip_address": "10.23.0.6/24"
+      "id": "guest-wifi-guest-dist-a-if",
+      "node_id": "guest-wifi",
+      "ip_address": "10.3.0.1/30"
     },
     {
-      "id": "wan-rtr-b-eth0",
-      "node_id": "wan-rtr-b",
-      "ip_address": "10.23.0.7/24"
+      "id": "dist-sw-a-guest-dist-a-if",
+      "node_id": "dist-sw-a",
+      "ip_address": "10.3.0.2/30"
     },
     {
-      "id": "campus-core-a-eth0",
+      "id": "guest-wifi-guest-dist-b-if",
+      "node_id": "guest-wifi",
+      "ip_address": "10.4.0.1/30"
+    },
+    {
+      "id": "dist-sw-b-guest-dist-b-if",
+      "node_id": "dist-sw-b",
+      "ip_address": "10.4.0.2/30"
+    },
+    {
+      "id": "factory-lan-factory-dist-a-if",
+      "node_id": "factory-lan",
+      "ip_address": "10.5.0.1/30"
+    },
+    {
+      "id": "dist-sw-a-factory-dist-a-if",
+      "node_id": "dist-sw-a",
+      "ip_address": "10.5.0.2/30"
+    },
+    {
+      "id": "factory-lan-factory-dist-b-if",
+      "node_id": "factory-lan",
+      "ip_address": "10.6.0.1/30"
+    },
+    {
+      "id": "dist-sw-b-factory-dist-b-if",
+      "node_id": "dist-sw-b",
+      "ip_address": "10.6.0.2/30"
+    },
+    {
+      "id": "dist-sw-a-dist-a-core-a-if",
+      "node_id": "dist-sw-a",
+      "ip_address": "10.7.0.1/30"
+    },
+    {
+      "id": "campus-core-a-dist-a-core-a-if",
       "node_id": "campus-core-a",
-      "ip_address": "10.23.0.8/24"
+      "ip_address": "10.7.0.2/30"
     },
     {
-      "id": "campus-core-b-eth0",
+      "id": "dist-sw-a-dist-a-core-b-if",
+      "node_id": "dist-sw-a",
+      "ip_address": "10.8.0.1/30"
+    },
+    {
+      "id": "campus-core-b-dist-a-core-b-if",
       "node_id": "campus-core-b",
-      "ip_address": "10.23.0.9/24"
+      "ip_address": "10.8.0.2/30"
     },
     {
-      "id": "fw-a-eth0",
+      "id": "dist-sw-b-dist-b-core-a-if",
+      "node_id": "dist-sw-b",
+      "ip_address": "10.9.0.1/30"
+    },
+    {
+      "id": "campus-core-a-dist-b-core-a-if",
+      "node_id": "campus-core-a",
+      "ip_address": "10.9.0.2/30"
+    },
+    {
+      "id": "dist-sw-b-dist-b-core-b-if",
+      "node_id": "dist-sw-b",
+      "ip_address": "10.10.0.1/30"
+    },
+    {
+      "id": "campus-core-b-dist-b-core-b-if",
+      "node_id": "campus-core-b",
+      "ip_address": "10.10.0.2/30"
+    },
+    {
+      "id": "campus-core-a-core-a-core-b-if",
+      "node_id": "campus-core-a",
+      "ip_address": "10.11.0.1/30"
+    },
+    {
+      "id": "campus-core-b-core-a-core-b-if",
+      "node_id": "campus-core-b",
+      "ip_address": "10.11.0.2/30"
+    },
+    {
+      "id": "campus-core-a-core-a-fw-a-if",
+      "node_id": "campus-core-a",
+      "ip_address": "10.12.0.1/30"
+    },
+    {
+      "id": "fw-a-core-a-fw-a-if",
       "node_id": "fw-a",
-      "ip_address": "10.23.0.10/24"
+      "ip_address": "10.12.0.2/30"
     },
     {
-      "id": "fw-b-eth0",
+      "id": "campus-core-a-core-a-fw-b-if",
+      "node_id": "campus-core-a",
+      "ip_address": "10.13.0.1/30"
+    },
+    {
+      "id": "fw-b-core-a-fw-b-if",
       "node_id": "fw-b",
-      "ip_address": "10.23.0.11/24"
+      "ip_address": "10.13.0.2/30"
     },
     {
-      "id": "internet-edge-a-eth0",
+      "id": "campus-core-b-core-b-fw-a-if",
+      "node_id": "campus-core-b",
+      "ip_address": "10.14.0.1/30"
+    },
+    {
+      "id": "fw-a-core-b-fw-a-if",
+      "node_id": "fw-a",
+      "ip_address": "10.14.0.2/30"
+    },
+    {
+      "id": "campus-core-b-core-b-fw-b-if",
+      "node_id": "campus-core-b",
+      "ip_address": "10.15.0.1/30"
+    },
+    {
+      "id": "fw-b-core-b-fw-b-if",
+      "node_id": "fw-b",
+      "ip_address": "10.15.0.2/30"
+    },
+    {
+      "id": "fw-a-fw-a-fw-b-if",
+      "node_id": "fw-a",
+      "ip_address": "10.16.0.1/30"
+    },
+    {
+      "id": "fw-b-fw-a-fw-b-if",
+      "node_id": "fw-b",
+      "ip_address": "10.16.0.2/30"
+    },
+    {
+      "id": "fw-a-fw-a-inet-a-if",
+      "node_id": "fw-a",
+      "ip_address": "10.17.0.1/30"
+    },
+    {
+      "id": "internet-edge-a-fw-a-inet-a-if",
       "node_id": "internet-edge-a",
-      "ip_address": "10.23.0.12/24"
+      "ip_address": "10.17.0.2/30"
     },
     {
-      "id": "internet-edge-b-eth0",
+      "id": "fw-b-fw-b-inet-b-if",
+      "node_id": "fw-b",
+      "ip_address": "10.18.0.1/30"
+    },
+    {
+      "id": "internet-edge-b-fw-b-inet-b-if",
       "node_id": "internet-edge-b",
-      "ip_address": "10.23.0.13/24"
+      "ip_address": "10.18.0.2/30"
     },
     {
-      "id": "proxy-vip-eth0",
-      "node_id": "proxy-vip",
-      "ip_address": "10.23.0.14/24"
+      "id": "internet-edge-a-inet-a-inet-b-if",
+      "node_id": "internet-edge-a",
+      "ip_address": "10.19.0.1/30"
     },
     {
-      "id": "dns-vip-eth0",
-      "node_id": "dns-vip",
-      "ip_address": "10.23.0.15/24"
+      "id": "internet-edge-b-inet-a-inet-b-if",
+      "node_id": "internet-edge-b",
+      "ip_address": "10.19.0.2/30"
     },
     {
-      "id": "internet-eth0",
+      "id": "internet-edge-a-inet-a-internet-if",
+      "node_id": "internet-edge-a",
+      "ip_address": "10.20.0.1/30"
+    },
+    {
+      "id": "internet-inet-a-internet-if",
       "node_id": "internet",
-      "ip_address": "10.23.0.16/24"
+      "ip_address": "10.20.0.2/30"
+    },
+    {
+      "id": "internet-edge-b-inet-b-internet-if",
+      "node_id": "internet-edge-b",
+      "ip_address": "10.21.0.1/30"
+    },
+    {
+      "id": "internet-inet-b-internet-if",
+      "node_id": "internet",
+      "ip_address": "10.21.0.2/30"
+    },
+    {
+      "id": "fw-a-fw-a-proxy-vip-if",
+      "node_id": "fw-a",
+      "ip_address": "10.22.0.1/30"
+    },
+    {
+      "id": "fw-b-fw-b-proxy-vip-if",
+      "node_id": "fw-b",
+      "ip_address": "10.23.0.1/30"
+    },
+    {
+      "id": "campus-core-a-core-a-dns-vip-if",
+      "node_id": "campus-core-a",
+      "ip_address": "10.24.0.1/30"
+    },
+    {
+      "id": "campus-core-b-core-b-dns-vip-if",
+      "node_id": "campus-core-b",
+      "ip_address": "10.25.0.1/30"
+    },
+    {
+      "id": "campus-core-a-core-a-wan-a-if",
+      "node_id": "campus-core-a",
+      "ip_address": "10.26.0.1/30"
+    },
+    {
+      "id": "wan-rtr-a-core-a-wan-a-if",
+      "node_id": "wan-rtr-a",
+      "ip_address": "10.26.0.2/30"
+    },
+    {
+      "id": "campus-core-b-core-b-wan-b-if",
+      "node_id": "campus-core-b",
+      "ip_address": "10.27.0.1/30"
+    },
+    {
+      "id": "wan-rtr-b-core-b-wan-b-if",
+      "node_id": "wan-rtr-b",
+      "ip_address": "10.27.0.2/30"
+    },
+    {
+      "id": "wan-rtr-a-wan-a-wan-b-if",
+      "node_id": "wan-rtr-a",
+      "ip_address": "10.28.0.1/30"
+    },
+    {
+      "id": "wan-rtr-b-wan-a-wan-b-if",
+      "node_id": "wan-rtr-b",
+      "ip_address": "10.28.0.2/30"
+    },
+    {
+      "id": "fw-a-proxy-vip-if",
+      "node_id": "fw-a",
+      "ip_address": "172.16.100.10/32"
+    },
+    {
+      "id": "campus-core-a-dns-vip-if",
+      "node_id": "campus-core-a",
+      "ip_address": "172.16.100.53/32"
     }
   ],
   "virtual_ips": [
@@ -156,7 +338,7 @@
       "standby_node_ids": [
         "fw-b"
       ],
-      "service_node_id": "proxy-vip"
+      "service_node_id": "fw-a"
     },
     {
       "id": "dns-vip",
@@ -166,205 +348,262 @@
       "standby_node_ids": [
         "campus-core-b"
       ],
-      "service_node_id": "dns-vip"
+      "service_node_id": "campus-core-a"
     }
   ],
   "links": [
     {
       "id": "hq-users-dist-a",
-      "from_interface": "hq-users-eth0",
-      "to_interface": "dist-sw-a-eth0",
+      "from_interface": "hq-users-hq-users-dist-a-if",
+      "to_interface": "dist-sw-a-hq-users-dist-a-if",
       "cost": 1,
       "active": true
     },
     {
       "id": "hq-users-dist-b",
-      "from_interface": "hq-users-eth0",
-      "to_interface": "dist-sw-b-eth0",
+      "from_interface": "hq-users-hq-users-dist-b-if",
+      "to_interface": "dist-sw-b-hq-users-dist-b-if",
       "cost": 2,
       "active": true
     },
     {
       "id": "guest-dist-a",
-      "from_interface": "guest-wifi-eth0",
-      "to_interface": "dist-sw-a-eth0",
+      "from_interface": "guest-wifi-guest-dist-a-if",
+      "to_interface": "dist-sw-a-guest-dist-a-if",
       "cost": 2,
       "active": true
     },
     {
       "id": "guest-dist-b",
-      "from_interface": "guest-wifi-eth0",
-      "to_interface": "dist-sw-b-eth0",
+      "from_interface": "guest-wifi-guest-dist-b-if",
+      "to_interface": "dist-sw-b-guest-dist-b-if",
       "cost": 2,
       "active": true
     },
     {
       "id": "factory-dist-a",
-      "from_interface": "factory-lan-eth0",
-      "to_interface": "dist-sw-a-eth0",
+      "from_interface": "factory-lan-factory-dist-a-if",
+      "to_interface": "dist-sw-a-factory-dist-a-if",
       "cost": 1,
       "active": true
     },
     {
       "id": "factory-dist-b",
-      "from_interface": "factory-lan-eth0",
-      "to_interface": "dist-sw-b-eth0",
+      "from_interface": "factory-lan-factory-dist-b-if",
+      "to_interface": "dist-sw-b-factory-dist-b-if",
       "cost": 1,
       "active": true
     },
     {
       "id": "dist-a-core-a",
-      "from_interface": "dist-sw-a-eth0",
-      "to_interface": "campus-core-a-eth0",
+      "from_interface": "dist-sw-a-dist-a-core-a-if",
+      "to_interface": "campus-core-a-dist-a-core-a-if",
       "cost": 1,
       "active": true
     },
     {
       "id": "dist-a-core-b",
-      "from_interface": "dist-sw-a-eth0",
-      "to_interface": "campus-core-b-eth0",
+      "from_interface": "dist-sw-a-dist-a-core-b-if",
+      "to_interface": "campus-core-b-dist-a-core-b-if",
       "cost": 2,
       "active": true
     },
     {
       "id": "dist-b-core-a",
-      "from_interface": "dist-sw-b-eth0",
-      "to_interface": "campus-core-a-eth0",
+      "from_interface": "dist-sw-b-dist-b-core-a-if",
+      "to_interface": "campus-core-a-dist-b-core-a-if",
       "cost": 2,
       "active": true
     },
     {
       "id": "dist-b-core-b",
-      "from_interface": "dist-sw-b-eth0",
-      "to_interface": "campus-core-b-eth0",
+      "from_interface": "dist-sw-b-dist-b-core-b-if",
+      "to_interface": "campus-core-b-dist-b-core-b-if",
       "cost": 1,
       "active": true
     },
     {
       "id": "core-a-core-b",
-      "from_interface": "campus-core-a-eth0",
-      "to_interface": "campus-core-b-eth0",
+      "from_interface": "campus-core-a-core-a-core-b-if",
+      "to_interface": "campus-core-b-core-a-core-b-if",
       "cost": 1,
       "active": true
     },
     {
       "id": "core-a-fw-a",
-      "from_interface": "campus-core-a-eth0",
-      "to_interface": "fw-a-eth0",
+      "from_interface": "campus-core-a-core-a-fw-a-if",
+      "to_interface": "fw-a-core-a-fw-a-if",
       "cost": 2,
       "active": true
     },
     {
       "id": "core-a-fw-b",
-      "from_interface": "campus-core-a-eth0",
-      "to_interface": "fw-b-eth0",
+      "from_interface": "campus-core-a-core-a-fw-b-if",
+      "to_interface": "fw-b-core-a-fw-b-if",
       "cost": 4,
       "active": true
     },
     {
       "id": "core-b-fw-a",
-      "from_interface": "campus-core-b-eth0",
-      "to_interface": "fw-a-eth0",
+      "from_interface": "campus-core-b-core-b-fw-a-if",
+      "to_interface": "fw-a-core-b-fw-a-if",
       "cost": 4,
       "active": true
     },
     {
       "id": "core-b-fw-b",
-      "from_interface": "campus-core-b-eth0",
-      "to_interface": "fw-b-eth0",
+      "from_interface": "campus-core-b-core-b-fw-b-if",
+      "to_interface": "fw-b-core-b-fw-b-if",
       "cost": 2,
       "active": true
     },
     {
       "id": "fw-a-fw-b",
-      "from_interface": "fw-a-eth0",
-      "to_interface": "fw-b-eth0",
+      "from_interface": "fw-a-fw-a-fw-b-if",
+      "to_interface": "fw-b-fw-a-fw-b-if",
       "cost": 1,
       "active": true
     },
     {
       "id": "fw-a-inet-a",
-      "from_interface": "fw-a-eth0",
-      "to_interface": "internet-edge-a-eth0",
+      "from_interface": "fw-a-fw-a-inet-a-if",
+      "to_interface": "internet-edge-a-fw-a-inet-a-if",
       "cost": 2,
       "active": true
     },
     {
       "id": "fw-b-inet-b",
-      "from_interface": "fw-b-eth0",
-      "to_interface": "internet-edge-b-eth0",
+      "from_interface": "fw-b-fw-b-inet-b-if",
+      "to_interface": "internet-edge-b-fw-b-inet-b-if",
       "cost": 2,
       "active": true
     },
     {
       "id": "inet-a-inet-b",
-      "from_interface": "internet-edge-a-eth0",
-      "to_interface": "internet-edge-b-eth0",
+      "from_interface": "internet-edge-a-inet-a-inet-b-if",
+      "to_interface": "internet-edge-b-inet-a-inet-b-if",
       "cost": 2,
       "active": true
     },
     {
       "id": "inet-a-internet",
-      "from_interface": "internet-edge-a-eth0",
-      "to_interface": "internet-eth0",
+      "from_interface": "internet-edge-a-inet-a-internet-if",
+      "to_interface": "internet-inet-a-internet-if",
       "cost": 5,
       "active": true
     },
     {
       "id": "inet-b-internet",
-      "from_interface": "internet-edge-b-eth0",
-      "to_interface": "internet-eth0",
+      "from_interface": "internet-edge-b-inet-b-internet-if",
+      "to_interface": "internet-inet-b-internet-if",
       "cost": 5,
       "active": true
     },
     {
-      "id": "fw-a-proxy-vip",
-      "from_interface": "fw-a-eth0",
-      "to_interface": "proxy-vip-eth0",
-      "cost": 1,
-      "active": true
-    },
-    {
-      "id": "fw-b-proxy-vip",
-      "from_interface": "fw-b-eth0",
-      "to_interface": "proxy-vip-eth0",
-      "cost": 2,
-      "active": true
-    },
-    {
-      "id": "core-a-dns-vip",
-      "from_interface": "campus-core-a-eth0",
-      "to_interface": "dns-vip-eth0",
-      "cost": 1,
-      "active": true
-    },
-    {
-      "id": "core-b-dns-vip",
-      "from_interface": "campus-core-b-eth0",
-      "to_interface": "dns-vip-eth0",
-      "cost": 2,
-      "active": true
-    },
-    {
       "id": "core-a-wan-a",
-      "from_interface": "campus-core-a-eth0",
-      "to_interface": "wan-rtr-a-eth0",
+      "from_interface": "campus-core-a-core-a-wan-a-if",
+      "to_interface": "wan-rtr-a-core-a-wan-a-if",
       "cost": 2,
       "active": true
     },
     {
       "id": "core-b-wan-b",
-      "from_interface": "campus-core-b-eth0",
-      "to_interface": "wan-rtr-b-eth0",
+      "from_interface": "campus-core-b-core-b-wan-b-if",
+      "to_interface": "wan-rtr-b-core-b-wan-b-if",
       "cost": 2,
       "active": true
     },
     {
       "id": "wan-a-wan-b",
-      "from_interface": "wan-rtr-a-eth0",
-      "to_interface": "wan-rtr-b-eth0",
+      "from_interface": "wan-rtr-a-wan-a-wan-b-if",
+      "to_interface": "wan-rtr-b-wan-a-wan-b-if",
       "cost": 2,
       "active": true
+    }
+  ],
+  "routing": [
+    {
+      "node_id": "hq-users",
+      "routing": {
+        "control_plane_protocols": [
+          {
+            "type": "static",
+            "name": "static",
+            "static_routes": {
+              "ipv4": [
+                {
+                  "name": "hq-users-default",
+                  "destination_prefix": "0.0.0.0/0",
+                  "next_hop": {
+                    "next_hop_node": "dist-sw-a",
+                    "outgoing_interface": "hq-users-hq-users-dist-a-if"
+                  },
+                  "metric": 10,
+                  "administrative_distance": 1,
+                  "vrf_id": "corp",
+                  "vlan_id": 10,
+                  "active": true
+                }
+              ]
+            }
+          }
+        ]
+      }
+    },
+    {
+      "node_id": "guest-wifi",
+      "routing": {
+        "control_plane_protocols": [
+          {
+            "type": "static",
+            "name": "static",
+            "static_routes": {
+              "ipv4": [
+                {
+                  "name": "guest-wifi-default",
+                  "destination_prefix": "0.0.0.0/0",
+                  "next_hop": {
+                    "next_hop_node": "dist-sw-a",
+                    "outgoing_interface": "guest-wifi-guest-dist-a-if"
+                  },
+                  "metric": 20,
+                  "administrative_distance": 1,
+                  "vrf_id": "guest",
+                  "vlan_id": 20,
+                  "active": true
+                }
+              ]
+            }
+          }
+        ]
+      }
+    },
+    {
+      "node_id": "fw-a",
+      "routing": {
+        "control_plane_protocols": [
+          {
+            "type": "static",
+            "name": "static",
+            "static_routes": {
+              "ipv4": [
+                {
+                  "name": "fw-a-internet",
+                  "destination_prefix": "0.0.0.0/0",
+                  "next_hop": {
+                    "next_hop_node": "internet-edge-a",
+                    "outgoing_interface": "fw-a-fw-a-inet-a-if"
+                  },
+                  "metric": 5,
+                  "administrative_distance": 1,
+                  "vrf_id": "corp",
+                  "active": true
+                }
+              ]
+            }
+          }
+        ]
+      }
     }
   ]
 }

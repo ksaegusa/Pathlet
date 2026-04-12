@@ -1,0 +1,534 @@
+{
+  "nodes": [
+    {
+      "id": "osaka-office",
+      "layer": "access"
+    },
+    {
+      "id": "tokyo-office",
+      "layer": "access"
+    },
+    {
+      "id": "nagoya-office",
+      "layer": "access"
+    },
+    {
+      "id": "osaka-wan-a",
+      "layer": "edge"
+    },
+    {
+      "id": "osaka-wan-b",
+      "layer": "edge"
+    },
+    {
+      "id": "tokyo-wan-a",
+      "layer": "edge"
+    },
+    {
+      "id": "tokyo-wan-b",
+      "layer": "edge"
+    },
+    {
+      "id": "nagoya-wan-a",
+      "layer": "edge"
+    },
+    {
+      "id": "nagoya-wan-b",
+      "layer": "edge"
+    },
+    {
+      "id": "primary-dc-core-a",
+      "layer": "core"
+    },
+    {
+      "id": "primary-dc-core-b",
+      "layer": "core"
+    },
+    {
+      "id": "dr-dc-core-a",
+      "layer": "core"
+    },
+    {
+      "id": "dr-dc-core-b",
+      "layer": "core"
+    },
+    {
+      "id": "dc-interconnect",
+      "layer": "core"
+    },
+    {
+      "id": "file-service",
+      "layer": "service"
+    },
+    {
+      "id": "monitoring",
+      "layer": "service"
+    }
+  ],
+  "interfaces": [
+    {
+      "id": "osaka-office-osaka-office-wan-a-if",
+      "node_id": "osaka-office",
+      "ip_address": "10.1.0.1/30"
+    },
+    {
+      "id": "osaka-wan-a-osaka-office-wan-a-if",
+      "node_id": "osaka-wan-a",
+      "ip_address": "10.1.0.2/30"
+    },
+    {
+      "id": "osaka-office-osaka-office-wan-b-if",
+      "node_id": "osaka-office",
+      "ip_address": "10.2.0.1/30"
+    },
+    {
+      "id": "osaka-wan-b-osaka-office-wan-b-if",
+      "node_id": "osaka-wan-b",
+      "ip_address": "10.2.0.2/30"
+    },
+    {
+      "id": "tokyo-office-tokyo-office-wan-a-if",
+      "node_id": "tokyo-office",
+      "ip_address": "10.3.0.1/30"
+    },
+    {
+      "id": "tokyo-wan-a-tokyo-office-wan-a-if",
+      "node_id": "tokyo-wan-a",
+      "ip_address": "10.3.0.2/30"
+    },
+    {
+      "id": "tokyo-office-tokyo-office-wan-b-if",
+      "node_id": "tokyo-office",
+      "ip_address": "10.4.0.1/30"
+    },
+    {
+      "id": "tokyo-wan-b-tokyo-office-wan-b-if",
+      "node_id": "tokyo-wan-b",
+      "ip_address": "10.4.0.2/30"
+    },
+    {
+      "id": "nagoya-office-nagoya-office-wan-a-if",
+      "node_id": "nagoya-office",
+      "ip_address": "10.5.0.1/30"
+    },
+    {
+      "id": "nagoya-wan-a-nagoya-office-wan-a-if",
+      "node_id": "nagoya-wan-a",
+      "ip_address": "10.5.0.2/30"
+    },
+    {
+      "id": "nagoya-office-nagoya-office-wan-b-if",
+      "node_id": "nagoya-office",
+      "ip_address": "10.6.0.1/30"
+    },
+    {
+      "id": "nagoya-wan-b-nagoya-office-wan-b-if",
+      "node_id": "nagoya-wan-b",
+      "ip_address": "10.6.0.2/30"
+    },
+    {
+      "id": "osaka-wan-a-osaka-wan-a-primary-a-if",
+      "node_id": "osaka-wan-a",
+      "ip_address": "10.7.0.1/30"
+    },
+    {
+      "id": "primary-dc-core-a-osaka-wan-a-primary-a-if",
+      "node_id": "primary-dc-core-a",
+      "ip_address": "10.7.0.2/30"
+    },
+    {
+      "id": "osaka-wan-b-osaka-wan-b-primary-b-if",
+      "node_id": "osaka-wan-b",
+      "ip_address": "10.8.0.1/30"
+    },
+    {
+      "id": "primary-dc-core-b-osaka-wan-b-primary-b-if",
+      "node_id": "primary-dc-core-b",
+      "ip_address": "10.8.0.2/30"
+    },
+    {
+      "id": "osaka-wan-a-osaka-wan-a-dr-a-if",
+      "node_id": "osaka-wan-a",
+      "ip_address": "10.9.0.1/30"
+    },
+    {
+      "id": "dr-dc-core-a-osaka-wan-a-dr-a-if",
+      "node_id": "dr-dc-core-a",
+      "ip_address": "10.9.0.2/30"
+    },
+    {
+      "id": "osaka-wan-b-osaka-wan-b-dr-b-if",
+      "node_id": "osaka-wan-b",
+      "ip_address": "10.10.0.1/30"
+    },
+    {
+      "id": "dr-dc-core-b-osaka-wan-b-dr-b-if",
+      "node_id": "dr-dc-core-b",
+      "ip_address": "10.10.0.2/30"
+    },
+    {
+      "id": "tokyo-wan-a-tokyo-wan-a-primary-a-if",
+      "node_id": "tokyo-wan-a",
+      "ip_address": "10.11.0.1/30"
+    },
+    {
+      "id": "primary-dc-core-a-tokyo-wan-a-primary-a-if",
+      "node_id": "primary-dc-core-a",
+      "ip_address": "10.11.0.2/30"
+    },
+    {
+      "id": "tokyo-wan-b-tokyo-wan-b-primary-b-if",
+      "node_id": "tokyo-wan-b",
+      "ip_address": "10.12.0.1/30"
+    },
+    {
+      "id": "primary-dc-core-b-tokyo-wan-b-primary-b-if",
+      "node_id": "primary-dc-core-b",
+      "ip_address": "10.12.0.2/30"
+    },
+    {
+      "id": "nagoya-wan-a-nagoya-wan-a-primary-a-if",
+      "node_id": "nagoya-wan-a",
+      "ip_address": "10.13.0.1/30"
+    },
+    {
+      "id": "primary-dc-core-a-nagoya-wan-a-primary-a-if",
+      "node_id": "primary-dc-core-a",
+      "ip_address": "10.13.0.2/30"
+    },
+    {
+      "id": "nagoya-wan-b-nagoya-wan-b-primary-b-if",
+      "node_id": "nagoya-wan-b",
+      "ip_address": "10.14.0.1/30"
+    },
+    {
+      "id": "primary-dc-core-b-nagoya-wan-b-primary-b-if",
+      "node_id": "primary-dc-core-b",
+      "ip_address": "10.14.0.2/30"
+    },
+    {
+      "id": "primary-dc-core-a-primary-a-primary-b-if",
+      "node_id": "primary-dc-core-a",
+      "ip_address": "10.15.0.1/30"
+    },
+    {
+      "id": "primary-dc-core-b-primary-a-primary-b-if",
+      "node_id": "primary-dc-core-b",
+      "ip_address": "10.15.0.2/30"
+    },
+    {
+      "id": "dr-dc-core-a-dr-a-dr-b-if",
+      "node_id": "dr-dc-core-a",
+      "ip_address": "10.16.0.1/30"
+    },
+    {
+      "id": "dr-dc-core-b-dr-a-dr-b-if",
+      "node_id": "dr-dc-core-b",
+      "ip_address": "10.16.0.2/30"
+    },
+    {
+      "id": "primary-dc-core-a-primary-a-dci-if",
+      "node_id": "primary-dc-core-a",
+      "ip_address": "10.17.0.1/30"
+    },
+    {
+      "id": "dc-interconnect-primary-a-dci-if",
+      "node_id": "dc-interconnect",
+      "ip_address": "10.17.0.2/30"
+    },
+    {
+      "id": "primary-dc-core-b-primary-b-dci-if",
+      "node_id": "primary-dc-core-b",
+      "ip_address": "10.18.0.1/30"
+    },
+    {
+      "id": "dc-interconnect-primary-b-dci-if",
+      "node_id": "dc-interconnect",
+      "ip_address": "10.18.0.2/30"
+    },
+    {
+      "id": "dr-dc-core-a-dr-a-dci-if",
+      "node_id": "dr-dc-core-a",
+      "ip_address": "10.19.0.1/30"
+    },
+    {
+      "id": "dc-interconnect-dr-a-dci-if",
+      "node_id": "dc-interconnect",
+      "ip_address": "10.19.0.2/30"
+    },
+    {
+      "id": "dr-dc-core-b-dr-b-dci-if",
+      "node_id": "dr-dc-core-b",
+      "ip_address": "10.20.0.1/30"
+    },
+    {
+      "id": "dc-interconnect-dr-b-dci-if",
+      "node_id": "dc-interconnect",
+      "ip_address": "10.20.0.2/30"
+    },
+    {
+      "id": "primary-dc-core-a-primary-a-erp-vip-if",
+      "node_id": "primary-dc-core-a",
+      "ip_address": "10.21.0.1/30"
+    },
+    {
+      "id": "primary-dc-core-b-primary-b-erp-vip-if",
+      "node_id": "primary-dc-core-b",
+      "ip_address": "10.22.0.1/30"
+    },
+    {
+      "id": "dr-dc-core-a-dr-a-erp-vip-if",
+      "node_id": "dr-dc-core-a",
+      "ip_address": "10.23.0.1/30"
+    },
+    {
+      "id": "primary-dc-core-b-primary-b-auth-vip-if",
+      "node_id": "primary-dc-core-b",
+      "ip_address": "10.24.0.1/30"
+    },
+    {
+      "id": "primary-dc-core-a-primary-a-file-service-if",
+      "node_id": "primary-dc-core-a",
+      "ip_address": "10.25.0.1/30"
+    },
+    {
+      "id": "file-service-primary-a-file-service-if",
+      "node_id": "file-service",
+      "ip_address": "10.25.0.2/30"
+    },
+    {
+      "id": "dr-dc-core-b-dr-b-file-service-if",
+      "node_id": "dr-dc-core-b",
+      "ip_address": "10.26.0.1/30"
+    },
+    {
+      "id": "file-service-dr-b-file-service-if",
+      "node_id": "file-service",
+      "ip_address": "10.26.0.2/30"
+    },
+    {
+      "id": "monitoring-monitoring-primary-a-if",
+      "node_id": "monitoring",
+      "ip_address": "10.27.0.1/30"
+    },
+    {
+      "id": "primary-dc-core-a-monitoring-primary-a-if",
+      "node_id": "primary-dc-core-a",
+      "ip_address": "10.27.0.2/30"
+    },
+    {
+      "id": "monitoring-monitoring-dr-a-if",
+      "node_id": "monitoring",
+      "ip_address": "10.28.0.1/30"
+    },
+    {
+      "id": "dr-dc-core-a-monitoring-dr-a-if",
+      "node_id": "dr-dc-core-a",
+      "ip_address": "10.28.0.2/30"
+    },
+    {
+      "id": "primary-dc-core-a-erp-vip-if",
+      "node_id": "primary-dc-core-a",
+      "ip_address": "10.10.10.10/32"
+    },
+    {
+      "id": "primary-dc-core-b-auth-vip-if",
+      "node_id": "primary-dc-core-b",
+      "ip_address": "10.10.10.20/32"
+    }
+  ],
+  "virtual_ips": [
+    {
+      "id": "erp-vip",
+      "protocol": "VRRP",
+      "address": "10.10.10.10",
+      "active_node_id": "primary-dc-core-a",
+      "standby_node_ids": [
+        "primary-dc-core-b",
+        "dr-dc-core-a"
+      ],
+      "service_node_id": "primary-dc-core-a"
+    },
+    {
+      "id": "auth-vip",
+      "protocol": "VRRP",
+      "address": "10.10.10.20",
+      "active_node_id": "primary-dc-core-b",
+      "standby_node_ids": [
+        "primary-dc-core-a",
+        "dr-dc-core-b"
+      ],
+      "service_node_id": "primary-dc-core-b"
+    }
+  ],
+  "links": [
+    {
+      "id": "osaka-office-wan-a",
+      "from_interface": "osaka-office-osaka-office-wan-a-if",
+      "to_interface": "osaka-wan-a-osaka-office-wan-a-if",
+      "cost": 2,
+      "active": true
+    },
+    {
+      "id": "osaka-office-wan-b",
+      "from_interface": "osaka-office-osaka-office-wan-b-if",
+      "to_interface": "osaka-wan-b-osaka-office-wan-b-if",
+      "cost": 3,
+      "active": true
+    },
+    {
+      "id": "tokyo-office-wan-a",
+      "from_interface": "tokyo-office-tokyo-office-wan-a-if",
+      "to_interface": "tokyo-wan-a-tokyo-office-wan-a-if",
+      "cost": 2,
+      "active": true
+    },
+    {
+      "id": "tokyo-office-wan-b",
+      "from_interface": "tokyo-office-tokyo-office-wan-b-if",
+      "to_interface": "tokyo-wan-b-tokyo-office-wan-b-if",
+      "cost": 3,
+      "active": true
+    },
+    {
+      "id": "nagoya-office-wan-a",
+      "from_interface": "nagoya-office-nagoya-office-wan-a-if",
+      "to_interface": "nagoya-wan-a-nagoya-office-wan-a-if",
+      "cost": 3,
+      "active": true
+    },
+    {
+      "id": "nagoya-office-wan-b",
+      "from_interface": "nagoya-office-nagoya-office-wan-b-if",
+      "to_interface": "nagoya-wan-b-nagoya-office-wan-b-if",
+      "cost": 4,
+      "active": true
+    },
+    {
+      "id": "osaka-wan-a-primary-a",
+      "from_interface": "osaka-wan-a-osaka-wan-a-primary-a-if",
+      "to_interface": "primary-dc-core-a-osaka-wan-a-primary-a-if",
+      "cost": 5,
+      "active": true
+    },
+    {
+      "id": "osaka-wan-b-primary-b",
+      "from_interface": "osaka-wan-b-osaka-wan-b-primary-b-if",
+      "to_interface": "primary-dc-core-b-osaka-wan-b-primary-b-if",
+      "cost": 6,
+      "active": true
+    },
+    {
+      "id": "osaka-wan-a-dr-a",
+      "from_interface": "osaka-wan-a-osaka-wan-a-dr-a-if",
+      "to_interface": "dr-dc-core-a-osaka-wan-a-dr-a-if",
+      "cost": 10,
+      "active": true
+    },
+    {
+      "id": "osaka-wan-b-dr-b",
+      "from_interface": "osaka-wan-b-osaka-wan-b-dr-b-if",
+      "to_interface": "dr-dc-core-b-osaka-wan-b-dr-b-if",
+      "cost": 9,
+      "active": true
+    },
+    {
+      "id": "tokyo-wan-a-primary-a",
+      "from_interface": "tokyo-wan-a-tokyo-wan-a-primary-a-if",
+      "to_interface": "primary-dc-core-a-tokyo-wan-a-primary-a-if",
+      "cost": 4,
+      "active": true
+    },
+    {
+      "id": "tokyo-wan-b-primary-b",
+      "from_interface": "tokyo-wan-b-tokyo-wan-b-primary-b-if",
+      "to_interface": "primary-dc-core-b-tokyo-wan-b-primary-b-if",
+      "cost": 5,
+      "active": true
+    },
+    {
+      "id": "nagoya-wan-a-primary-a",
+      "from_interface": "nagoya-wan-a-nagoya-wan-a-primary-a-if",
+      "to_interface": "primary-dc-core-a-nagoya-wan-a-primary-a-if",
+      "cost": 6,
+      "active": true
+    },
+    {
+      "id": "nagoya-wan-b-primary-b",
+      "from_interface": "nagoya-wan-b-nagoya-wan-b-primary-b-if",
+      "to_interface": "primary-dc-core-b-nagoya-wan-b-primary-b-if",
+      "cost": 6,
+      "active": true
+    },
+    {
+      "id": "primary-a-primary-b",
+      "from_interface": "primary-dc-core-a-primary-a-primary-b-if",
+      "to_interface": "primary-dc-core-b-primary-a-primary-b-if",
+      "cost": 1,
+      "active": true
+    },
+    {
+      "id": "dr-a-dr-b",
+      "from_interface": "dr-dc-core-a-dr-a-dr-b-if",
+      "to_interface": "dr-dc-core-b-dr-a-dr-b-if",
+      "cost": 1,
+      "active": true
+    },
+    {
+      "id": "primary-a-dci",
+      "from_interface": "primary-dc-core-a-primary-a-dci-if",
+      "to_interface": "dc-interconnect-primary-a-dci-if",
+      "cost": 3,
+      "active": true
+    },
+    {
+      "id": "primary-b-dci",
+      "from_interface": "primary-dc-core-b-primary-b-dci-if",
+      "to_interface": "dc-interconnect-primary-b-dci-if",
+      "cost": 3,
+      "active": true
+    },
+    {
+      "id": "dr-a-dci",
+      "from_interface": "dr-dc-core-a-dr-a-dci-if",
+      "to_interface": "dc-interconnect-dr-a-dci-if",
+      "cost": 4,
+      "active": true
+    },
+    {
+      "id": "dr-b-dci",
+      "from_interface": "dr-dc-core-b-dr-b-dci-if",
+      "to_interface": "dc-interconnect-dr-b-dci-if",
+      "cost": 4,
+      "active": true
+    },
+    {
+      "id": "primary-a-file-service",
+      "from_interface": "primary-dc-core-a-primary-a-file-service-if",
+      "to_interface": "file-service-primary-a-file-service-if",
+      "cost": 2,
+      "active": true
+    },
+    {
+      "id": "dr-b-file-service",
+      "from_interface": "dr-dc-core-b-dr-b-file-service-if",
+      "to_interface": "file-service-dr-b-file-service-if",
+      "cost": 5,
+      "active": true
+    },
+    {
+      "id": "monitoring-primary-a",
+      "from_interface": "monitoring-monitoring-primary-a-if",
+      "to_interface": "primary-dc-core-a-monitoring-primary-a-if",
+      "cost": 2,
+      "active": true
+    },
+    {
+      "id": "monitoring-dr-a",
+      "from_interface": "monitoring-monitoring-dr-a-if",
+      "to_interface": "dr-dc-core-a-monitoring-dr-a-if",
+      "cost": 3,
+      "active": true
+    }
+  ]
+}
