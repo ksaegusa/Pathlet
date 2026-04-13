@@ -503,6 +503,18 @@ Rust core は 2 つの計算モードを持ちます。
 
 `routing_table` は現在、宛先 node/interface の完全一致、宛先 IPv4/CIDR、default route (`0.0.0.0/0`) を扱います。VRF / VLAN はモデルとして保持しますが、lookup の分離条件としてはまだ使っていません。
 
+### Policy / NAT の適用順
+
+現在の実装は簡易パイプラインです。`shortest_path` または `routing_table` で経路を決めた後、Policy を評価し、その後に NAT を評価します。
+
+```text
+route lookup -> Policy -> NAT
+```
+
+Policy と NAT は path 上の interface ペアを送信方向に順に見ます。各 hop で `from_interface` 側を `egress`、`to_interface` 側を `ingress` として扱います。
+
+このため、現時点の Policy は NAT 前の source / destination を見ます。NAT は `source` / `destination` の変換結果をレスポンスに返しますが、NAT 後のアドレスで Policy を再評価したり、DNAT 後の宛先で route lookup をやり直したりはしません。stateful firewall、return traffic、reverse NAT、vendor ごとの pre-routing / post-routing の差分もまだ扱いません。
+
 ### cost と metric
 
 Pathlet では `link.cost` と `routing[].static_routes.ipv4[].metric` を分けて扱います。
