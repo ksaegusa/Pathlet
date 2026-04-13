@@ -36,10 +36,10 @@ fn main() {
     println!("pathlet is running at {url}");
     println!("press Ctrl+C to stop");
 
-    if config.open_browser {
-        if let Err(error) = webbrowser::open(&url) {
-            eprintln!("failed to open browser: {error}");
-        }
+    if config.open_browser
+        && let Err(error) = webbrowser::open(&url)
+    {
+        eprintln!("failed to open browser: {error}");
     }
 
     for request in server.incoming_requests() {

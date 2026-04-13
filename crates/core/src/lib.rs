@@ -3,6 +3,14 @@ use std::cmp::Ordering;
 use std::collections::{BinaryHeap, HashMap, HashSet};
 use std::net::Ipv4Addr;
 
+mod ip;
+mod nat;
+mod policy;
+
+use ip::{interface_ip, ipv4_prefix_match};
+use nat::apply_nat;
+use policy::apply_policy;
+
 pub type AdjacencyList = HashMap<String, Vec<(String, u32)>>;
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
@@ -107,6 +115,8 @@ pub struct Graph {
     #[serde(deserialize_with = "deserialize_interfaces")]
     pub interfaces: Vec<Interface>,
     pub links: Vec<Link>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub nat_rules: Vec<NatRule>,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub routing: Vec<YangRouting>,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
@@ -232,6 +242,37 @@ pub struct YangAclAttachment {
 }
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct NatRule {
+    pub id: String,
+    pub node_id: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub interface_id: Option<String>,
+    pub direction: NatDirection,
+    pub nat_type: NatType,
+    pub original: String,
+    pub translated: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub protocol: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub port: Option<u16>,
+    pub active: bool,
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum NatDirection {
+    Ingress,
+    Egress,
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum NatType {
+    Source,
+    Destination,
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub struct RouteRequest {
     pub graph: Graph,
     pub from_interface: String,
@@ -268,6 +309,12 @@ pub struct RouteResponse {
     pub matched_route_ids: Option<Vec<String>>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub matched_policy_ids: Option<Vec<String>>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub matched_nat_rule_ids: Option<Vec<String>>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub translated_source: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub translated_destination: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub loop_link_ids: Option<Vec<String>>,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -315,6 +362,9 @@ pub struct Route {
     pub status: RouteStatus,
     pub matched_route_ids: Vec<String>,
     pub matched_policy_ids: Vec<String>,
+    pub matched_nat_rule_ids: Vec<String>,
+    pub translated_source: Option<String>,
+    pub translated_destination: Option<String>,
     pub loop_link_ids: Vec<String>,
 }
 
@@ -430,6 +480,34 @@ impl Graph {
                     return Err(RouteError::invalid_input(format!(
                         "route '{}' egress_interface '{}' belongs to node '{}', not '{}'",
                         route.id, egress_interface, interface.node_id, route.node_id
+                    )));
+                }
+            }
+        }
+
+        for rule in &self.nat_rules {
+            if !node_ids.contains(rule.node_id.as_str()) {
+                return Err(RouteError::invalid_input(format!(
+                    "NAT rule '{}' references missing node '{}'",
+                    rule.id, rule.node_id
+                )));
+            }
+            if let Some(interface_id) = &rule.interface_id {
+                let Some(interface) = self
+                    .interfaces
+                    .iter()
+                    .find(|interface| interface.id == *interface_id)
+                else {
+                    return Err(RouteError::invalid_input(format!(
+                        "NAT rule '{}' references missing interface '{}'",
+                        rule.id, interface_id
+                    )));
+                };
+
+                if interface.node_id != rule.node_id {
+                    return Err(RouteError::invalid_input(format!(
+                        "NAT rule '{}' interface '{}' belongs to node '{}', not '{}'",
+                        rule.id, interface_id, interface.node_id, rule.node_id
                     )));
                 }
             }
@@ -561,6 +639,9 @@ impl From<Result<Route, RouteError>> for RouteResponse {
                 status: Some(route.status),
                 matched_route_ids: Some(route.matched_route_ids),
                 matched_policy_ids: Some(route.matched_policy_ids),
+                matched_nat_rule_ids: Some(route.matched_nat_rule_ids),
+                translated_source: route.translated_source,
+                translated_destination: route.translated_destination,
                 loop_link_ids: Some(route.loop_link_ids),
                 error: None,
             },
@@ -572,6 +653,9 @@ impl From<Result<Route, RouteError>> for RouteResponse {
                 status: None,
                 matched_route_ids: None,
                 matched_policy_ids: None,
+                matched_nat_rule_ids: None,
+                translated_source: None,
+                translated_destination: None,
                 loop_link_ids: None,
                 error: Some(error),
             },
@@ -657,6 +741,9 @@ pub fn shortest_path(
         status: RouteStatus::Reachable,
         matched_route_ids: vec![],
         matched_policy_ids: vec![],
+        matched_nat_rule_ids: vec![],
+        translated_source: None,
+        translated_destination: None,
         loop_link_ids: vec![],
     })
 }
@@ -694,6 +781,9 @@ fn unreachable_shortest_path_route(
         status: RouteStatus::Unreachable,
         matched_route_ids: vec![],
         matched_policy_ids: vec![],
+        matched_nat_rule_ids: vec![],
+        translated_source: None,
+        translated_destination: None,
         loop_link_ids: vec![],
     }
 }
@@ -727,6 +817,7 @@ pub fn calculate_route(request: RouteRequest) -> Result<Route, RouteError> {
     }?;
 
     apply_policy(&request.graph, &mut route, request.traffic.as_ref())?;
+    apply_nat(&request.graph, &mut route, request.traffic.as_ref())?;
     Ok(route)
 }
 
@@ -770,6 +861,9 @@ pub fn routing_table_path(
                 status: RouteStatus::Reachable,
                 matched_route_ids,
                 matched_policy_ids: vec![],
+                matched_nat_rule_ids: vec![],
+                translated_source: None,
+                translated_destination: None,
                 loop_link_ids,
             });
         }
@@ -792,6 +886,9 @@ pub fn routing_table_path(
                         status: RouteStatus::NoRoute,
                         matched_route_ids,
                         matched_policy_ids: vec![],
+                        matched_nat_rule_ids: vec![],
+                        translated_source: None,
+                        translated_destination: None,
                         loop_link_ids,
                     });
                 };
@@ -804,6 +901,9 @@ pub fn routing_table_path(
                         status: RouteStatus::Blackhole,
                         matched_route_ids,
                         matched_policy_ids: vec![],
+                        matched_nat_rule_ids: vec![],
+                        translated_source: None,
+                        translated_destination: None,
                         loop_link_ids,
                     });
                 };
@@ -852,6 +952,9 @@ pub fn routing_table_path(
                 status: RouteStatus::Loop,
                 matched_route_ids,
                 matched_policy_ids: vec![],
+                matched_nat_rule_ids: vec![],
+                translated_source: None,
+                translated_destination: None,
                 loop_link_ids,
             });
         }
@@ -867,6 +970,9 @@ pub fn routing_table_path(
         status: RouteStatus::Loop,
         matched_route_ids,
         matched_policy_ids: vec![],
+        matched_nat_rule_ids: vec![],
+        translated_source: None,
+        translated_destination: None,
         loop_link_ids,
     })
 }
@@ -909,10 +1015,10 @@ fn route_match_score(
     }
 
     if let Some(target_ip) = target_ip {
-        if let Some(route_ip) = interface_ip(&route.destination) {
-            if route_ip == target_ip {
-                return Some(128);
-            }
+        if let Some(route_ip) = interface_ip(&route.destination)
+            && route_ip == target_ip
+        {
+            return Some(128);
         }
         if let Some(prefix_len) = ipv4_prefix_match(&route.destination, target_ip) {
             return Some(prefix_len);
@@ -1056,204 +1162,6 @@ fn links_between_path_nodes(graph: &Graph, path: &[String], start_index: usize) 
     link_ids
 }
 
-fn apply_policy(
-    graph: &Graph,
-    route: &mut Route,
-    traffic: Option<&TrafficSpec>,
-) -> Result<(), RouteError> {
-    if graph.acls.is_empty()
-        || graph.acl_attachments.is_empty()
-        || route.status != RouteStatus::Reachable
-    {
-        return Ok(());
-    }
-
-    let Some(traffic) = traffic else {
-        return Ok(());
-    };
-
-    let interface_by_id = graph
-        .interfaces
-        .iter()
-        .map(|interface| (interface.id.as_str(), interface))
-        .collect::<HashMap<_, _>>();
-
-    for [from_interface_id, to_interface_id] in route.path.windows(2).filter_map(to_pair) {
-        let from_interface_id = from_interface_id.as_str();
-        let to_interface_id = to_interface_id.as_str();
-        let Some(_link) = graph.links.iter().find(|link| {
-            (link.from_interface == from_interface_id && link.to_interface == to_interface_id)
-                || (link.from_interface == to_interface_id
-                    && link.to_interface == from_interface_id)
-        }) else {
-            continue;
-        };
-        let from_interface = interface_by_id.get(from_interface_id).ok_or_else(|| {
-            RouteError::invalid_input(format!(
-                "path references missing interface '{from_interface_id}'"
-            ))
-        })?;
-        let to_interface = interface_by_id.get(to_interface_id).ok_or_else(|| {
-            RouteError::invalid_input(format!(
-                "path references missing interface '{to_interface_id}'"
-            ))
-        })?;
-
-        if let Some(denied_policy_id) =
-            denied_policy_for_interface(graph, traffic, from_interface, "egress")
-        {
-            route.status = RouteStatus::PolicyDenied;
-            route.matched_policy_ids.push(denied_policy_id);
-            return Ok(());
-        }
-        if let Some(denied_policy_id) =
-            denied_policy_for_interface(graph, traffic, to_interface, "ingress")
-        {
-            route.status = RouteStatus::PolicyDenied;
-            route.matched_policy_ids.push(denied_policy_id);
-            return Ok(());
-        }
-    }
-
-    Ok(())
-}
-
-fn to_pair<T>(window: &[T]) -> Option<[&T; 2]> {
-    let [left, right] = window else {
-        return None;
-    };
-    Some([left, right])
-}
-
-fn denied_policy_for_interface(
-    graph: &Graph,
-    traffic: &TrafficSpec,
-    interface: &Interface,
-    direction: &str,
-) -> Option<String> {
-    let acl_by_name = graph
-        .acls
-        .iter()
-        .map(|acl| (acl.name.as_str(), acl))
-        .collect::<HashMap<_, _>>();
-
-    graph
-        .acl_attachments
-        .iter()
-        .filter(|attachment| attachment.node_id == interface.node_id)
-        .filter(|attachment| {
-            attachment
-                .interface_id
-                .as_deref()
-                .is_none_or(|interface_id| interface_id == interface.id)
-        })
-        .find_map(|attachment| {
-            let acl_names = if direction == "ingress" {
-                &attachment.ingress
-            } else {
-                &attachment.egress
-            };
-
-            acl_names.iter().find_map(|acl_name| {
-                let acl = acl_by_name.get(acl_name.as_str())?;
-                acl.aces
-                    .iter()
-                    .filter(|ace| ace.active)
-                    .find(|ace| ace_matches_traffic(ace, traffic))
-                    .and_then(|ace| {
-                        (ace.actions.forwarding == YangForwardingAction::Drop).then(|| {
-                            format!(
-                                "{}::{}::{direction}::{acl_name}::{}",
-                                attachment.node_id,
-                                attachment.interface_id.as_deref().unwrap_or("node"),
-                                ace.name
-                            )
-                        })
-                    })
-            })
-        })
-}
-
-fn ace_matches_traffic(ace: &YangAce, traffic: &TrafficSpec) -> bool {
-    let protocol = traffic.protocol.to_ascii_lowercase();
-
-    if ace.matches.icmp.is_some() && protocol != "icmp" {
-        return false;
-    }
-    if let Some(tcp) = &ace.matches.tcp {
-        if protocol != "tcp" || !transport_match(tcp, traffic.port) {
-            return false;
-        }
-    }
-    if let Some(udp) = &ace.matches.udp {
-        if protocol != "udp" || !transport_match(udp, traffic.port) {
-            return false;
-        }
-    }
-    if let Some(ipv4) = &ace.matches.ipv4 {
-        if let Some(source_network) = &ipv4.source_ipv4_network {
-            let Some(source) = traffic.source.as_deref().and_then(interface_ip) else {
-                return false;
-            };
-            if !ipv4_network_matches(source_network, source) {
-                return false;
-            }
-        }
-        if let Some(destination_network) = &ipv4.destination_ipv4_network {
-            let Some(destination) = traffic.destination.as_deref().and_then(interface_ip) else {
-                return false;
-            };
-            if !ipv4_network_matches(destination_network, destination) {
-                return false;
-            }
-        }
-    }
-
-    true
-}
-
-fn transport_match(match_item: &YangTransportMatch, port: Option<u16>) -> bool {
-    match &match_item.destination_port {
-        Some(destination_port) if destination_port.operator == "eq" => {
-            port == Some(destination_port.port)
-        }
-        Some(_) => false,
-        None => true,
-    }
-}
-
-fn ipv4_network_matches(network: &str, ip: Ipv4Addr) -> bool {
-    if network == "any" {
-        return true;
-    }
-    if network.contains('/') {
-        return ipv4_prefix_match(network, ip).is_some();
-    }
-    if let Some(network_ip) = interface_ip(network) {
-        return network_ip == ip;
-    }
-    false
-}
-
-fn interface_ip(value: &str) -> Option<Ipv4Addr> {
-    value.split('/').next()?.parse().ok()
-}
-
-fn ipv4_prefix_match(cidr: &str, target_ip: Ipv4Addr) -> Option<u8> {
-    let (network, prefix_len) = cidr.split_once('/')?;
-    let network = network.parse::<Ipv4Addr>().ok()?;
-    let prefix_len = prefix_len.parse::<u8>().ok()?;
-    if prefix_len > 32 {
-        return None;
-    }
-    let mask = if prefix_len == 0 {
-        0
-    } else {
-        u32::MAX << (32 - prefix_len)
-    };
-    ((u32::from(network) & mask) == (u32::from(target_ip) & mask)).then_some(prefix_len)
-}
-
 pub fn calculate_route_json(input: &str) -> String {
     let response = match parse_route_request(input) {
         Ok(request) => RouteResponse::from(calculate_route(request)),
@@ -1265,6 +1173,9 @@ pub fn calculate_route_json(input: &str) -> String {
             status: None,
             matched_route_ids: None,
             matched_policy_ids: None,
+            matched_nat_rule_ids: None,
+            translated_source: None,
+            translated_destination: None,
             loop_link_ids: None,
             error: Some(RouteError::invalid_input(format!(
                 "invalid JSON/YAML route request: {error}"
@@ -1405,6 +1316,7 @@ mod tests {
                     active: false,
                 },
             ],
+            nat_rules: vec![],
             routing: vec![],
             acls: vec![],
             acl_attachments: vec![],
@@ -1711,6 +1623,42 @@ mod tests {
     }
 
     #[test]
+    fn route_calculation_applies_egress_source_nat() {
+        let mut graph = sample_graph();
+        graph.nat_rules = vec![NatRule {
+            id: "r2-snat".into(),
+            node_id: "r2".into(),
+            interface_id: Some("r2-eth0".into()),
+            direction: NatDirection::Egress,
+            nat_type: NatType::Source,
+            original: "10.0.0.0/24".into(),
+            translated: "203.0.113.10".into(),
+            protocol: Some("tcp".into()),
+            port: Some(443),
+            active: true,
+        }];
+
+        let route = calculate_route(RouteRequest {
+            graph,
+            from_interface: "r1-eth0".into(),
+            to_interface: "r3-eth0".into(),
+            mode: RouteMode::ShortestPath,
+            traffic: Some(TrafficSpec {
+                protocol: "tcp".into(),
+                port: Some(443),
+                source: Some("10.0.0.1/24".into()),
+                destination: Some("10.0.2.3/24".into()),
+            }),
+        })
+        .unwrap();
+
+        assert_eq!(route.status, RouteStatus::Reachable);
+        assert_eq!(route.matched_nat_rule_ids, vec!["r2-snat"]);
+        assert_eq!(route.translated_source, Some("203.0.113.10".into()));
+        assert_eq!(route.translated_destination, None);
+    }
+
+    #[test]
     fn json_api_returns_success_response() {
         let request = RouteRequest {
             graph: sample_graph(),
@@ -1736,6 +1684,9 @@ mod tests {
                 status: Some(RouteStatus::Reachable),
                 matched_route_ids: Some(vec![]),
                 matched_policy_ids: Some(vec![]),
+                matched_nat_rule_ids: Some(vec![]),
+                translated_source: None,
+                translated_destination: None,
                 loop_link_ids: Some(vec![]),
                 error: None,
             }

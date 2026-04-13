@@ -3,445 +3,82 @@ import { createRoot } from "react-dom/client";
 import { Cable, FileDown, FileJson, GitBranch, Network, Shield, Zap } from "lucide-react";
 import { clsx, type ClassValue } from "clsx";
 import { twMerge } from "tailwind-merge";
-import { parse as parseYaml, stringify as stringifyYaml } from "yaml";
+import { stringify as stringifyYaml } from "yaml";
+import { exampleGraph } from "./exampleGraph";
+import {
+  applyRuntimeState,
+  buildLayout,
+  buildTrafficIntent,
+  buildTrafficSpec,
+  clamp,
+  cleanNatRule,
+  cleanPolicyRule,
+  cleanRouteEntry,
+  downloadTextFile,
+  edgeKey,
+  exportableGraph,
+  formatBandwidth,
+  graphGroups,
+  graphWithPolicies,
+  graphWithRoutes,
+  groupLabel,
+  interfaceForNewLinkEndpoint,
+  interfaceIdsFromPath,
+  interfaceLabel,
+  linkEndpointInterfaceId,
+  linkGeometry,
+  linkNodeIds,
+  nodeCapabilities,
+  loopLinkIdsFromRoute,
+  nodeDeviceType,
+  nodeDeviceTypeLabel,
+  nodeGroupId,
+  nodeIdsFromPath,
+  nodeIdsFromRoute,
+  nodeLabelLines,
+  normalizeTransportPort,
+  optionalNumber,
+  parseTopologyText,
+  policyRulesFromGraph,
+  routeDirectionsFromPath,
+  routeEntriesFromGraph,
+  routeRequestOrGraphToGraph,
+  routeSegmentsFromPath,
+  sanitizeClassName,
+  toggleSetValue,
+  uniqueLinkId,
+  uniqueNatRuleId,
+  uniquePolicyId,
+  uniqueRouteId,
+  virtualIpForInterface,
+} from "./graphModel";
+import type {
+  ActiveModal,
+  GraphModel,
+  InterfaceDisplayMode,
+  LayoutDirection,
+  LinkModel,
+  NatRuleModel,
+  NodeDeviceType,
+  NodeGroupModel,
+  NodeModel,
+  PolicyProtocol,
+  PolicyRuleModel,
+  RouteEntryModel,
+  RouteEdgeDirection,
+  RouteMode,
+  RouteRequest,
+  RouteResponse,
+  RouteStatus,
+  TrafficIntent,
+  TrafficProtocol,
+  WasmModule,
+} from "./types";
 import initWasm, { shortest_path } from "./wasm/pathlet_wasm.js";
 import "./styles.css";
 
-type NodeModel = {
-  id: string;
-  device_type?: NodeDeviceType;
-  group_id?: string;
-  layer?: NetworkLayer;
-  x?: number;
-  y?: number;
-};
-
-type NodeDeviceType = "network_device" | "client";
-type NetworkLayer = "access" | "edge" | "core" | "service";
-
-type NodeGroupModel = {
-  id: string;
-  label: string;
-};
-
-type InterfaceModel = {
-  id: string;
-  node_id: string;
-  ip_address?: string;
-};
-
-type YangInterfaceNodeModel = {
-  node_id: string;
-  interfaces: {
-    interface: YangInterfaceModel[];
-  };
-};
-
-type YangInterfaceModel = {
-  name: string;
-  type?: string;
-  enabled?: boolean;
-  ipv4?: {
-    address?: Array<{
-      ip: string;
-      prefix_length?: number;
-    }>;
-  };
-};
-
-type LinkModel = {
-  id: string;
-  from_interface: string;
-  to_interface: string;
-  bandwidth_mbps?: number;
-  cost: number;
-  active: boolean;
-};
-
-type VirtualIpModel = {
-  id: string;
-  protocol: string;
-  address: string;
-  active_node_id: string;
-  standby_node_ids: string[];
-  service_node_id: string;
-};
-
-type RouteEntryModel = {
-  id: string;
-  node_id: string;
-  destination: string;
-  next_hop?: string;
-  egress_interface?: string;
-  metric: number;
-  administrative_distance?: number;
-  vrf_id?: string;
-  vlan_id?: number;
-  active: boolean;
-};
-
-type YangStaticRouteModel = {
-  name: string;
-  destination_prefix: string;
-  next_hop?: {
-    next_hop_address?: string;
-    next_hop_node?: string;
-    outgoing_interface?: string;
-  };
-  metric: number;
-  administrative_distance?: number;
-  vrf_id?: string;
-  vlan_id?: number;
-  active: boolean;
-};
-
-type YangRoutingModel = {
-  node_id: string;
-  routing: {
-    control_plane_protocols: Array<{
-      type: "static";
-      name: string;
-      static_routes: {
-        ipv4: YangStaticRouteModel[];
-      };
-    }>;
-  };
-};
-
-type PolicyProtocol = TrafficProtocol | "any";
-
-type PolicyRuleModel = {
-  id: string;
-  node_id: string;
-  interface_id?: string;
-  acl_name: string;
-  ace_name: string;
-  name?: string;
-  direction: "ingress" | "egress";
-  action: "permit" | "deny";
-  protocol: PolicyProtocol;
-  source: string;
-  destination: string;
-  port?: number;
-  active: boolean;
-};
-
-type YangAclModel = {
-  name: string;
-  type: "ipv4-acl";
-  aces: Array<{
-    name: string;
-    active?: boolean;
-    matches: {
-      ipv4?: {
-        source_ipv4_network?: string;
-        destination_ipv4_network?: string;
-      };
-      tcp?: {
-        destination_port?: {
-          operator: "eq";
-          port: number;
-        };
-      };
-      udp?: {
-        destination_port?: {
-          operator: "eq";
-          port: number;
-        };
-      };
-      icmp?: Record<string, never>;
-    };
-    actions: {
-      forwarding: "accept" | "drop";
-    };
-  }>;
-};
-
-type YangAclAttachmentModel = {
-  node_id: string;
-  interface_id?: string;
-  ingress?: string[];
-  egress?: string[];
-};
-
-type GraphModel = {
-  nodes: NodeModel[];
-  interfaces: InterfaceModel[];
-  links: LinkModel[];
-  groups?: NodeGroupModel[];
-  virtual_ips?: VirtualIpModel[];
-  routing?: YangRoutingModel[];
-  acls?: YangAclModel[];
-  acl_attachments?: YangAclAttachmentModel[];
-  routes?: RouteEntryModel[];
-  policies?: PolicyRuleModel[];
-};
-
-type InputGraphModel = Omit<GraphModel, "interfaces"> & {
-  interfaces: InterfaceModel[] | YangInterfaceNodeModel[];
-};
-
-type InputRouteRequest = Omit<RouteRequest, "graph"> & {
-  graph: InputGraphModel;
-};
-
-type RouteRequest = {
-  graph: GraphModel;
-  from_interface: string;
-  to_interface: string;
-  mode: RouteMode;
-  traffic?: {
-    protocol: TrafficProtocol;
-    port?: number;
-    source?: string;
-    destination?: string;
-  };
-};
-
-type RouteResponse =
-  | {
-      ok: true;
-      path: string[];
-      equal_cost_paths?: string[][];
-      cost: number;
-      status?: RouteStatus;
-      matched_route_ids?: string[];
-      matched_policy_ids?: string[];
-      loop_link_ids?: string[];
-    }
-  | { ok: false; error: { code: string; message: string } };
-
-type TrafficProtocol = "icmp" | "tcp" | "udp";
-type LayoutDirection = "lr" | "td";
-type RouteMode = "shortest_path" | "routing_table";
-type RouteStatus = "reachable" | "unreachable" | "loop" | "no_route" | "blackhole" | "policy_denied";
-type InterfaceDisplayMode = "compact" | "detail";
-type ActiveModal = "link" | "links" | "graph" | "node" | "routing" | "policy" | "nat";
-
-type TrafficIntent = {
-  source_node_id: string;
-  destination_node_id: string;
-  protocol: TrafficProtocol;
-  port?: number;
-  expectations: {
-    reachable: boolean;
-    via_node_id?: string;
-    strict_path?: boolean;
-    policy?: "permit" | "deny";
-    nat_source_address?: string;
-  };
-};
-
-type RouteEdgeDirection = {
-  from_interface: string;
-  to_interface: string;
-};
-
-type WasmModule = {
-  shortest_path: (json: string) => string;
-};
-
-const exampleNodes: NodeModel[] = [
-  { id: "osaka-office", device_type: "client", layer: "access" },
-  { id: "tokyo-office", device_type: "client", layer: "access" },
-  { id: "osaka-wan", device_type: "network_device", layer: "edge" },
-  { id: "tokyo-wan", device_type: "network_device", layer: "edge" },
-  { id: "primary-center", device_type: "network_device", layer: "core" },
-  { id: "dr-center", device_type: "network_device", layer: "core" },
-  { id: "internet-gw", device_type: "network_device", layer: "core" },
-  { id: "auth", device_type: "client", layer: "service" },
-];
-
-type ExampleLinkSpec = {
-  id: string;
-  fromNode: string;
-  toNode: string;
-  bandwidthMbps: number;
-};
-
-type ExampleRouteSpec = {
-  id: string;
-  nodeId: string;
-  destination: string;
-  nextHop: string;
-  egressLinkId: string;
-  metric: number;
-  administrativeDistance?: number;
-  vrfId?: string;
-  vlanId?: number;
-};
-
-function exampleLinkSpec(id: string, fromNode: string, toNode: string, bandwidthMbps: number): ExampleLinkSpec {
-  return { id, fromNode, toNode, bandwidthMbps };
-}
-
-function exampleRouteSpec(spec: ExampleRouteSpec): RouteEntryModel {
-  return {
-    id: spec.id,
-    node_id: spec.nodeId,
-    destination: spec.destination,
-    next_hop: spec.nextHop,
-    egress_interface: linkEndpointInterfaceId(spec.egressLinkId, spec.nodeId),
-    metric: spec.metric,
-    administrative_distance: spec.administrativeDistance ?? 1,
-    vrf_id: spec.vrfId ?? "default",
-    vlan_id: spec.vlanId,
-    active: true,
-  };
-}
-
-function exampleLink({ id, fromNode, toNode, bandwidthMbps }: ExampleLinkSpec): LinkModel {
-  return {
-    id,
-    from_interface: linkEndpointInterfaceId(id, fromNode),
-    to_interface: linkEndpointInterfaceId(id, toNode),
-    bandwidth_mbps: bandwidthMbps,
-    cost: linkCostFromBandwidth(bandwidthMbps),
-    active: true,
-  };
-}
-
-const exampleLinkSpecs = [
-  exampleLinkSpec("osaka-office-wan", "osaka-office", "osaka-wan", 1000),
-  exampleLinkSpec("tokyo-office-wan", "tokyo-office", "tokyo-wan", 1000),
-  exampleLinkSpec("osaka-primary", "osaka-wan", "primary-center", 40000),
-  exampleLinkSpec("osaka-dr", "osaka-wan", "dr-center", 10000),
-  exampleLinkSpec("tokyo-primary", "tokyo-wan", "primary-center", 40000),
-  exampleLinkSpec("primary-dr", "primary-center", "dr-center", 100000),
-  exampleLinkSpec("primary-internet", "primary-center", "internet-gw", 1000),
-  exampleLinkSpec("dr-internet", "dr-center", "internet-gw", 1000),
-  exampleLinkSpec("primary-auth", "primary-center", "auth", 10000),
-  exampleLinkSpec("dr-auth", "dr-center", "auth", 1000),
-];
-
-const exampleInterfaces = [
-  ...exampleLinkSpecs.flatMap((link, index) => [
-    {
-      id: linkEndpointInterfaceId(link.id, link.fromNode),
-      node_id: link.fromNode,
-      ip_address: `10.0.${index}.1/30`,
-    },
-    {
-      id: linkEndpointInterfaceId(link.id, link.toNode),
-      node_id: link.toNode,
-      ip_address: `10.0.${index}.2/30`,
-    },
-  ]),
-  {
-    id: "primary-center-erp-vip-if",
-    node_id: "primary-center",
-    ip_address: "10.10.0.10/32",
-  },
-];
-
-const exampleRouteSpecs = [
-  exampleRouteSpec({
-    id: "osaka-office-default",
-    nodeId: "osaka-office",
-    destination: "0.0.0.0/0",
-    nextHop: "osaka-wan",
-    egressLinkId: "osaka-office-wan",
-    metric: 10,
-  }),
-  exampleRouteSpec({
-    id: "osaka-wan-primary",
-    nodeId: "osaka-wan",
-    destination: "primary-center",
-    nextHop: "primary-center",
-    egressLinkId: "osaka-primary",
-    metric: 20,
-    vlanId: 100,
-  }),
-  exampleRouteSpec({
-    id: "osaka-wan-dr",
-    nodeId: "osaka-wan",
-    destination: "primary-center",
-    nextHop: "dr-center",
-    egressLinkId: "osaka-dr",
-    metric: 30,
-    vlanId: 100,
-  }),
-  exampleRouteSpec({
-    id: "tokyo-office-default",
-    nodeId: "tokyo-office",
-    destination: "0.0.0.0/0",
-    nextHop: "tokyo-wan",
-    egressLinkId: "tokyo-office-wan",
-    metric: 10,
-  }),
-  exampleRouteSpec({
-    id: "tokyo-wan-primary",
-    nodeId: "tokyo-wan",
-    destination: "primary-center",
-    nextHop: "primary-center",
-    egressLinkId: "tokyo-primary",
-    metric: 20,
-    vlanId: 100,
-  }),
-];
-
-const examplePolicies: PolicyRuleModel[] = [
-  {
-    id: "primary-center-allow-https",
-    node_id: "primary-center",
-    acl_name: "primary-center-ingress",
-    ace_name: "allow-https-to-erp",
-    name: "allow-https-to-erp",
-    direction: "ingress",
-    action: "permit",
-    protocol: "tcp",
-    source: "osaka-office",
-    destination: "10.10.0.10/32",
-    port: 443,
-    active: true,
-  },
-  {
-    id: "primary-center-deny-any",
-    node_id: "primary-center",
-    acl_name: "primary-center-ingress",
-    ace_name: "default-deny",
-    name: "default-deny",
-    direction: "ingress",
-    action: "deny",
-    protocol: "any",
-    source: "any",
-    destination: "any",
-    active: true,
-  },
-];
-
-const exampleGraph: GraphModel = {
-  nodes: exampleNodes,
-  interfaces: exampleInterfaces,
-  virtual_ips: [
-    {
-      id: "erp-vip",
-      protocol: "VRRP",
-      address: "10.10.0.10",
-      active_node_id: "primary-center",
-      standby_node_ids: ["dr-center"],
-      service_node_id: "primary-center",
-    },
-  ],
-  links: exampleLinkSpecs.map(exampleLink),
-  routing: routesToYangRouting(exampleRouteSpecs),
-  acls: policiesToYangAcls(examplePolicies),
-  acl_attachments: policiesToYangAclAttachments(examplePolicies),
-};
-
 const nodeRadius = 26;
 const interfaceRadius = 6;
-const layerOrder: NetworkLayer[] = ["access", "edge", "core", "service"];
-const layerLabels: Record<NetworkLayer, string> = {
-  access: "拠点",
-  edge: "WAN",
-  core: "センター",
-  service: "サービス",
-};
-const defaultGroups: NodeGroupModel[] = layerOrder.map((layer) => ({
-  id: layer,
-  label: layerLabels[layer],
-}));
 
 function App() {
   const [graph, setGraph] = useState<GraphModel>(exampleGraph);
@@ -698,6 +335,12 @@ function App() {
   }
 
   function addRoute(nodeId: string) {
+    const node = graph.nodes.find((nodeItem) => nodeItem.id === nodeId);
+    if (node && nodeCapabilities(node).defaultRouteOnly && routeEntriesFromGraph(graph).some((route) => route.node_id === nodeId && route.destination === "0.0.0.0/0")) {
+      setStatus(`${nodeId} にはデフォルトルートがすでにあります`);
+      return;
+    }
+
     setGraph((currentGraph) =>
       graphWithRoutes(currentGraph, [
         ...routeEntriesFromGraph(currentGraph),
@@ -719,9 +362,16 @@ function App() {
     setGraph((currentGraph) =>
       graphWithRoutes(
         currentGraph,
-        routeEntriesFromGraph(currentGraph).map((route) =>
-          route.id === routeId ? cleanRouteEntry({ ...route, ...patch }) : route
-        )
+        routeEntriesFromGraph(currentGraph).map((route) => {
+          if (route.id !== routeId) {
+            return route;
+          }
+          const nextRoute = cleanRouteEntry({ ...route, ...patch });
+          const node = currentGraph.nodes.find((nodeItem) => nodeItem.id === nextRoute.node_id);
+          return node && nodeCapabilities(node).defaultRouteOnly
+            ? { ...nextRoute, destination: "0.0.0.0/0" }
+            : nextRoute;
+        })
       )
     );
   }
@@ -778,6 +428,43 @@ function App() {
       )
     );
     setStatus(`${policyId} を削除しました`);
+  }
+
+  function addNatRule(nodeId: string) {
+    setGraph((currentGraph) => ({
+      ...currentGraph,
+      nat_rules: [
+        ...(currentGraph.nat_rules ?? []),
+        {
+          id: uniqueNatRuleId(currentGraph, nodeId),
+          node_id: nodeId,
+          direction: "egress",
+          nat_type: "source",
+          original: "any",
+          translated: "203.0.113.10",
+          protocol: "any",
+          active: true,
+        },
+      ],
+    }));
+    setStatus(`${nodeId} にNATルールを追加しました`);
+  }
+
+  function updateNatRule(ruleId: string, patch: Partial<NatRuleModel>) {
+    setGraph((currentGraph) => ({
+      ...currentGraph,
+      nat_rules: (currentGraph.nat_rules ?? []).map((rule) =>
+        rule.id === ruleId ? cleanNatRule({ ...rule, ...patch }) : rule
+      ),
+    }));
+  }
+
+  function deleteNatRule(ruleId: string) {
+    setGraph((currentGraph) => ({
+      ...currentGraph,
+      nat_rules: (currentGraph.nat_rules ?? []).filter((rule) => rule.id !== ruleId),
+    }));
+    setStatus(`${ruleId} を削除しました`);
   }
 
   function addLink() {
@@ -1066,6 +753,9 @@ function App() {
                 onAddPolicy={addPolicy}
                 onUpdatePolicy={updatePolicy}
                 onDeletePolicy={deletePolicy}
+                onAddNatRule={addNatRule}
+                onUpdateNatRule={updateNatRule}
+                onDeleteNatRule={deleteNatRule}
                 onSelectLink={(linkId) => {
                   setSelectedLinkId(linkId);
                   setActiveModal("link");
@@ -1076,7 +766,7 @@ function App() {
             ) : activeModal === "policy" ? (
               <PolicyPanel graph={graph} onAddPolicy={addPolicy} onUpdatePolicy={updatePolicy} onDeletePolicy={deletePolicy} />
             ) : activeModal === "nat" ? (
-              <NatPanel />
+              <NatPanel graph={graph} onAddNatRule={addNatRule} onUpdateNatRule={updateNatRule} onDeleteNatRule={deleteNatRule} />
             ) : (
               <GraphEditor
                 graph={graph}
@@ -1297,24 +987,41 @@ function Topology({
           interfaces.some((interfaceItem) => interfaceItem.id === fromInterface) ||
           interfaces.some((interfaceItem) => interfaceItem.id === toInterface);
         const isDimmed = hasRoute && !routeNodeIds.has(node.id) && !isEndpointNode;
+        const isClientNode = nodeDeviceType(node) === "client";
+        const nodeShapeClassName = cn(
+          "node",
+          `group-${sanitizeClassName(nodeGroupId(node))}`,
+          draggingNodeId === node.id && "dragging",
+          nodeDown && "down",
+          isDimmed && "dimmed"
+        );
+        const nodeHandlers = {
+          onClick: () => selectNodeUnlessDragged(node.id),
+          onPointerDown: (event: ReactPointerEvent) => startNodeDrag(event, node.id),
+        };
 
         return (
           <g key={node.id}>
             <title>{`${node.id}${interfaces.length ? ` / ${interfaces.length} interfaces` : ""}`}</title>
-            <circle
-              className={cn(
-                "node",
-                `group-${sanitizeClassName(nodeGroupId(node))}`,
-                draggingNodeId === node.id && "dragging",
-                nodeDown && "down",
-                isDimmed && "dimmed"
-              )}
-              cx={point.x}
-              cy={point.y}
-              r={nodeRadius}
-              onClick={() => selectNodeUnlessDragged(node.id)}
-              onPointerDown={(event) => startNodeDrag(event, node.id)}
-            />
+            {isClientNode ? (
+              <circle
+                className={nodeShapeClassName}
+                cx={point.x}
+                cy={point.y}
+                r={nodeRadius}
+                {...nodeHandlers}
+              />
+            ) : (
+              <rect
+                className={nodeShapeClassName}
+                height={nodeRadius * 2}
+                rx="6"
+                width={nodeRadius * 2}
+                x={point.x - nodeRadius}
+                y={point.y - nodeRadius}
+                {...nodeHandlers}
+              />
+            )}
             <text
               className={cn(
                 "node-label",
@@ -1419,7 +1126,7 @@ function RouteDetails({
                 response.error.message
               ),
               notApplicableItem("経路", "未計算"),
-              notImplementedItem("NAT"),
+              notApplicableItem("NAT", "未計算"),
               notApplicableItem("Policy", "未計算"),
             ]}
           />
@@ -1439,7 +1146,7 @@ function RouteDetails({
     expectedVia
       ? viaEvaluationItem(expectedVia, routeNodeIds, intent.expectations.strict_path ?? false)
       : notApplicableItem("経由拠点", "指定なし"),
-    notImplementedItem("NAT"),
+    natEvaluationItem(intent, response),
     evaluationItem(
       "Policy",
       "permit",
@@ -1502,7 +1209,7 @@ function RouteDetails({
           <summary className="cursor-pointer font-semibold text-zinc-700">
             参照ルート ({response.matched_route_ids.length})
           </summary>
-          <p className="mt-2 break-all font-mono leading-5">{response.matched_route_ids.join(" -> ")}</p>
+          <p className="mt-2 overflow-x-auto whitespace-nowrap font-mono leading-5">{response.matched_route_ids.join(" -> ")}</p>
         </details>
       ) : null}
 
@@ -1511,7 +1218,19 @@ function RouteDetails({
           <summary className="cursor-pointer font-semibold">
             Policy deny ({response.matched_policy_ids.length})
           </summary>
-          <p className="mt-2 break-all font-mono leading-5">{response.matched_policy_ids.join(" -> ")}</p>
+          <p className="mt-2 overflow-x-auto whitespace-nowrap font-mono leading-5">{response.matched_policy_ids.join(" -> ")}</p>
+        </details>
+      ) : null}
+
+      {response.matched_nat_rule_ids?.length ? (
+        <details className="rounded-md border border-teal-200 bg-teal-50 px-3 py-2 text-xs text-teal-700">
+          <summary className="cursor-pointer font-semibold">
+            NAT ({response.matched_nat_rule_ids.length})
+          </summary>
+          <p className="mt-2 overflow-x-auto whitespace-nowrap font-mono leading-5">{response.matched_nat_rule_ids.join(" -> ")}</p>
+          <p className="mt-2 overflow-x-auto whitespace-nowrap font-mono leading-5">
+            source {response.translated_source ?? "-"} / destination {response.translated_destination ?? "-"}
+          </p>
         </details>
       ) : null}
     </div>
@@ -1522,6 +1241,7 @@ type EvaluationItem = {
   label: string;
   expected: string;
   actual: string;
+  detail?: string;
   status: "OK" | "NG" | "not_applicable" | "not_implemented";
 };
 
@@ -1542,9 +1262,14 @@ function EvaluationList({ items, subject, routePath }: { items: EvaluationItem[]
           <span className="min-w-0 break-words font-mono text-zinc-600" title={item.expected}>
             要件: {item.expected}
           </span>
-          <span className="min-w-0 break-words font-mono text-zinc-600" title={item.actual}>
-            結果: {item.actual}
-          </span>
+          <div className="min-w-0 font-mono text-zinc-600" title={item.actual}>
+            <span className="break-words">結果: {item.actual}</span>
+            {item.detail ? (
+              <code className="mt-1 block max-w-full truncate rounded bg-zinc-100 px-1.5 py-1 text-[11px] text-zinc-500" title={item.detail}>
+                {item.detail}
+              </code>
+            ) : null}
+          </div>
           <Badge tone={item.status === "OK" ? "success" : item.status === "NG" ? "danger" : "muted"}>
             {evaluationStatusLabel(item.status)}
           </Badge>
@@ -1579,7 +1304,9 @@ function TrafficIntentEditor({
     <div className="grid gap-2 rounded-md border border-zinc-200 bg-zinc-50 p-3">
       <div>
         <h3 className="text-xs font-semibold text-zinc-500">通信要件</h3>
-        <p className="mt-1 text-xs text-zinc-500">経路検証に使う通信条件を指定します。</p>
+        <p className="mt-1 text-xs text-zinc-500">
+          エンドツーエンドの到達性を検証します。NAT は結果側に変換内容として表示します。
+        </p>
       </div>
       <div className="grid grid-cols-[1fr_88px] gap-2">
         <label className="grid gap-1 text-xs font-semibold text-zinc-600">
@@ -1704,6 +1431,9 @@ function NodeDetailsPanel({
   onAddPolicy,
   onUpdatePolicy,
   onDeletePolicy,
+  onAddNatRule,
+  onUpdateNatRule,
+  onDeleteNatRule,
   onSelectLink,
 }: {
   graph: GraphModel;
@@ -1721,6 +1451,9 @@ function NodeDetailsPanel({
   onAddPolicy: (nodeId: string) => void;
   onUpdatePolicy: (policyId: string, patch: Partial<PolicyRuleModel>) => void;
   onDeletePolicy: (policyId: string) => void;
+  onAddNatRule: (nodeId: string) => void;
+  onUpdateNatRule: (ruleId: string, patch: Partial<NatRuleModel>) => void;
+  onDeleteNatRule: (ruleId: string) => void;
   onSelectLink: (linkId: string) => void;
 }) {
   if (!node) {
@@ -1746,9 +1479,12 @@ function NodeDetailsPanel({
   const policies = policyRulesFromGraph(graph)
     .filter((policy) => policy.node_id === node.id)
     .sort((a, b) => a.direction.localeCompare(b.direction) || a.id.localeCompare(b.id));
+  const natRules = (graph.nat_rules ?? [])
+    .filter((rule) => rule.node_id === node.id)
+    .sort((a, b) => a.direction.localeCompare(b.direction) || a.id.localeCompare(b.id));
   const nodeDown = downNodeIds.has(node.id);
   const deviceType = nodeDeviceType(node);
-  const isClient = deviceType === "client";
+  const capabilities = nodeCapabilities(node);
 
   return (
     <div className="grid gap-4 p-4">
@@ -1771,11 +1507,15 @@ function NodeDetailsPanel({
         <div className="grid gap-1 text-sm text-zinc-600">
           <div>インターフェース: {interfaces.length}</div>
           <div>接続リンク: {connectedLinks.length}</div>
-          {isClient ? <div>Client は1ポートとデフォルトルートを基本に扱います。</div> : null}
+          <div>
+            {capabilities.defaultRouteOnly
+              ? "Client は1ポートとデフォルトルートを基本に扱います。"
+              : "Network Device は複数ポート、Routing、Policy、NAT、VIPを扱います。"}
+          </div>
         </div>
       </div>
 
-      {!isClient && virtualIps.length ? (
+      {capabilities.canHostVip && virtualIps.length ? (
         <div className="grid gap-2">
           <h3 className="text-sm font-semibold text-zinc-950">冗長VIP</h3>
           {virtualIps.map((virtualIp) => (
@@ -1797,125 +1537,225 @@ function NodeDetailsPanel({
         </div>
       ) : null}
 
-      {!isClient ? (
+      {capabilities.canEditPolicy ? (
         <div className="grid gap-2">
-        <div className="flex items-center justify-between gap-3">
-          <h3 className="text-sm font-semibold text-zinc-950">Policy</h3>
-          <button className={buttonClass("secondary")} type="button" onClick={() => onAddPolicy(node.id)}>
-            Policy追加
-          </button>
-        </div>
-        {policies.length ? (
-          policies.map((policy) => (
-            <div className="grid gap-2 rounded-lg border border-zinc-200 bg-white p-3" key={policy.id}>
-              <div className="flex flex-wrap items-center justify-between gap-2">
-                <div className="flex flex-wrap items-center gap-2">
-                  <span className="break-all font-mono text-xs font-semibold text-zinc-800">
-                    {policy.id}
-                  </span>
-                  <Badge tone={policy.active ? "success" : "muted"}>
-                    {policy.active ? "active" : "inactive"}
-                  </Badge>
-                  <Badge tone={policy.action === "permit" ? "success" : "danger"}>
-                    {policy.action}
-                  </Badge>
-                </div>
-                <div className="flex flex-wrap gap-2">
-                  <button
-                    className={buttonClass(policy.active ? "danger" : "success")}
-                    type="button"
-                    onClick={() => onUpdatePolicy(policy.id, { active: !policy.active })}
-                  >
-                    {policy.active ? "無効化" : "有効化"}
-                  </button>
-                  <button className={buttonClass("danger")} type="button" onClick={() => onDeletePolicy(policy.id)}>
-                    削除
-                  </button>
-                </div>
-              </div>
-              <div className="grid gap-2 md:grid-cols-2">
-                <Field label="名前">
-                  <input
-                    className={inputClass}
-                    value={policy.name ?? ""}
-                    onChange={(event) => onUpdatePolicy(policy.id, { name: event.target.value })}
-                  />
-                </Field>
-                <div className="grid grid-cols-2 gap-2">
-                  <Field label="方向">
-                    <select
-                      className={inputClass}
-                      value={policy.direction}
-                      onChange={(event) => onUpdatePolicy(policy.id, { direction: event.target.value as PolicyRuleModel["direction"] })}
+          <div className="flex items-center justify-between gap-3">
+            <h3 className="text-sm font-semibold text-zinc-950">Policy</h3>
+            <button className={buttonClass("secondary")} type="button" onClick={() => onAddPolicy(node.id)}>
+              Policy追加
+            </button>
+          </div>
+          {policies.length ? (
+            policies.map((policy) => (
+              <div className="grid gap-2 rounded-lg border border-zinc-200 bg-white p-3" key={policy.id}>
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <span className="min-w-0 max-w-full overflow-x-auto whitespace-nowrap font-mono text-xs font-semibold text-zinc-800" title={policy.id}>
+                      {policy.id}
+                    </span>
+                    <Badge tone={policy.active ? "success" : "muted"}>
+                      {policy.active ? "active" : "inactive"}
+                    </Badge>
+                    <Badge tone={policy.action === "permit" ? "success" : "danger"}>
+                      {policy.action}
+                    </Badge>
+                  </div>
+                  <div className="flex flex-wrap gap-2">
+                    <button
+                      className={buttonClass(policy.active ? "danger" : "success")}
+                      type="button"
+                      onClick={() => onUpdatePolicy(policy.id, { active: !policy.active })}
                     >
-                      <option value="ingress">ingress</option>
-                      <option value="egress">egress</option>
-                    </select>
-                  </Field>
-                  <Field label="動作">
-                    <select
-                      className={inputClass}
-                      value={policy.action}
-                      onChange={(event) => onUpdatePolicy(policy.id, { action: event.target.value as PolicyRuleModel["action"] })}
-                    >
-                      <option value="permit">permit</option>
-                      <option value="deny">deny</option>
-                    </select>
-                  </Field>
+                      {policy.active ? "無効化" : "有効化"}
+                    </button>
+                    <button className={buttonClass("danger")} type="button" onClick={() => onDeletePolicy(policy.id)}>
+                      削除
+                    </button>
+                  </div>
                 </div>
-                <Field label="送信元">
-                  <input
-                    className={inputClass}
-                    value={policy.source}
-                    onChange={(event) => onUpdatePolicy(policy.id, { source: event.target.value })}
-                  />
-                </Field>
-                <Field label="宛先">
-                  <input
-                    className={inputClass}
-                    value={policy.destination}
-                    onChange={(event) => onUpdatePolicy(policy.id, { destination: event.target.value })}
-                  />
-                </Field>
-                <div className="grid grid-cols-[1fr_7rem] gap-2">
-                  <Field label="プロトコル">
-                    <select
-                      className={inputClass}
-                      value={policy.protocol}
-                      onChange={(event) => onUpdatePolicy(policy.id, { protocol: event.target.value as PolicyProtocol })}
-                    >
-                      <option value="any">any</option>
-                      <option value="icmp">ICMP</option>
-                      <option value="tcp">TCP</option>
-                      <option value="udp">UDP</option>
-                    </select>
-                  </Field>
-                  <Field label="ポート">
+                <div className="grid gap-2 md:grid-cols-2">
+                  <Field label="名前">
                     <input
                       className={inputClass}
-                      disabled={policy.protocol === "any" || policy.protocol === "icmp"}
-                      min="1"
-                      max="65535"
-                      type="number"
-                      value={policy.protocol === "any" || policy.protocol === "icmp" ? "" : policy.port ?? ""}
-                      onChange={(event) => onUpdatePolicy(policy.id, { port: normalizeTransportPort(Number(event.target.value)) })}
+                      value={policy.name ?? ""}
+                      onChange={(event) => onUpdatePolicy(policy.id, { name: event.target.value })}
                     />
                   </Field>
+                  <div className="grid grid-cols-2 gap-2">
+                    <Field label="方向">
+                      <select
+                        className={inputClass}
+                        value={policy.direction}
+                        onChange={(event) => onUpdatePolicy(policy.id, { direction: event.target.value as PolicyRuleModel["direction"] })}
+                      >
+                        <option value="ingress">ingress</option>
+                        <option value="egress">egress</option>
+                      </select>
+                    </Field>
+                    <Field label="動作">
+                      <select
+                        className={inputClass}
+                        value={policy.action}
+                        onChange={(event) => onUpdatePolicy(policy.id, { action: event.target.value as PolicyRuleModel["action"] })}
+                      >
+                        <option value="permit">permit</option>
+                        <option value="deny">deny</option>
+                      </select>
+                    </Field>
+                  </div>
+                  <Field label="送信元">
+                    <input
+                      className={inputClass}
+                      value={policy.source}
+                      onChange={(event) => onUpdatePolicy(policy.id, { source: event.target.value })}
+                    />
+                  </Field>
+                  <Field label="宛先">
+                    <input
+                      className={inputClass}
+                      value={policy.destination}
+                      onChange={(event) => onUpdatePolicy(policy.id, { destination: event.target.value })}
+                    />
+                  </Field>
+                  <div className="grid grid-cols-[1fr_7rem] gap-2">
+                    <Field label="プロトコル">
+                      <select
+                        className={inputClass}
+                        value={policy.protocol}
+                        onChange={(event) => onUpdatePolicy(policy.id, { protocol: event.target.value as PolicyProtocol })}
+                      >
+                        <option value="any">any</option>
+                        <option value="icmp">ICMP</option>
+                        <option value="tcp">TCP</option>
+                        <option value="udp">UDP</option>
+                      </select>
+                    </Field>
+                    <Field label="ポート">
+                      <input
+                        className={inputClass}
+                        disabled={policy.protocol === "any" || policy.protocol === "icmp"}
+                        min="1"
+                        max="65535"
+                        type="number"
+                        value={policy.protocol === "any" || policy.protocol === "icmp" ? "" : policy.port ?? ""}
+                        onChange={(event) => onUpdatePolicy(policy.id, { port: normalizeTransportPort(Number(event.target.value)) })}
+                      />
+                    </Field>
+                  </div>
                 </div>
               </div>
-            </div>
-          ))
-        ) : (
-          <EmptyMessage>このノードにPolicyはありません。</EmptyMessage>
-        )}
+            ))
+          ) : (
+            <EmptyMessage>このノードにPolicyはありません。</EmptyMessage>
+          )}
+        </div>
+      ) : null}
+
+      {capabilities.canEditNat ? (
+        <div className="grid gap-2">
+          <div className="flex items-center justify-between gap-3">
+            <h3 className="text-sm font-semibold text-zinc-950">NAT</h3>
+            <button className={buttonClass("secondary")} type="button" onClick={() => onAddNatRule(node.id)}>
+              NAT追加
+            </button>
+          </div>
+          {natRules.length ? (
+            natRules.map((rule) => (
+              <div className="grid gap-2 rounded-lg border border-zinc-200 bg-white p-3" key={rule.id}>
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <span className="min-w-0 max-w-full overflow-x-auto whitespace-nowrap font-mono text-xs font-semibold text-zinc-800" title={rule.id}>
+                      {rule.id}
+                    </span>
+                    <Badge tone={rule.active ? "success" : "muted"}>
+                      {rule.active ? "active" : "inactive"}
+                    </Badge>
+                    <Badge>{rule.direction}</Badge>
+                    <Badge>{rule.nat_type}</Badge>
+                  </div>
+                  <div className="flex flex-wrap gap-2">
+                    <button
+                      className={buttonClass(rule.active ? "danger" : "success")}
+                      type="button"
+                      onClick={() => onUpdateNatRule(rule.id, { active: !rule.active })}
+                    >
+                      {rule.active ? "無効化" : "有効化"}
+                    </button>
+                    <button className={buttonClass("danger")} type="button" onClick={() => onDeleteNatRule(rule.id)}>
+                      削除
+                    </button>
+                  </div>
+                </div>
+                <div className="grid gap-2 md:grid-cols-2">
+                  <Field label="interface">
+                    <select className={inputClass} value={rule.interface_id ?? ""} onChange={(event) => onUpdateNatRule(rule.id, { interface_id: event.target.value || undefined })}>
+                      <option value="">node-wide</option>
+                      {interfaces.map((interfaceItem) => (
+                        <option key={interfaceItem.id} value={interfaceItem.id}>
+                          {interfaceLabel(graph, interfaceItem.id)}
+                        </option>
+                      ))}
+                    </select>
+                  </Field>
+                  <div className="grid grid-cols-2 gap-2">
+                    <Field label="direction">
+                      <select className={inputClass} value={rule.direction} onChange={(event) => onUpdateNatRule(rule.id, { direction: event.target.value as NatRuleModel["direction"] })}>
+                        <option value="ingress">ingress</option>
+                        <option value="egress">egress</option>
+                      </select>
+                    </Field>
+                    <Field label="type">
+                      <select className={inputClass} value={rule.nat_type} onChange={(event) => onUpdateNatRule(rule.id, { nat_type: event.target.value as NatRuleModel["nat_type"] })}>
+                        <option value="source">source</option>
+                        <option value="destination">destination</option>
+                      </select>
+                    </Field>
+                  </div>
+                  <Field label="original">
+                    <input className={inputClass} value={rule.original} onChange={(event) => onUpdateNatRule(rule.id, { original: event.target.value })} />
+                  </Field>
+                  <Field label="translated">
+                    <input className={inputClass} value={rule.translated} onChange={(event) => onUpdateNatRule(rule.id, { translated: event.target.value })} />
+                  </Field>
+                  <div className="grid grid-cols-[1fr_7rem] gap-2">
+                    <Field label="protocol">
+                      <select
+                        className={inputClass}
+                        value={rule.protocol ?? "any"}
+                        onChange={(event) => onUpdateNatRule(rule.id, { protocol: event.target.value as PolicyProtocol, port: event.target.value === "tcp" || event.target.value === "udp" ? rule.port : undefined })}
+                      >
+                        <option value="any">any</option>
+                        <option value="icmp">ICMP</option>
+                        <option value="tcp">TCP</option>
+                        <option value="udp">UDP</option>
+                      </select>
+                    </Field>
+                    <Field label="port">
+                      <input
+                        className={inputClass}
+                        disabled={rule.protocol === "any" || rule.protocol === "icmp" || !rule.protocol}
+                        min="1"
+                        max="65535"
+                        type="number"
+                        value={rule.protocol === "tcp" || rule.protocol === "udp" ? rule.port ?? "" : ""}
+                        onChange={(event) => onUpdateNatRule(rule.id, { port: optionalNumber(event.target.value) })}
+                      />
+                    </Field>
+                  </div>
+                </div>
+              </div>
+            ))
+          ) : (
+            <EmptyMessage>このノードにNATルールはありません。</EmptyMessage>
+          )}
         </div>
       ) : null}
 
       <div className="grid gap-2">
         <div className="flex items-center justify-between gap-3">
-          <h3 className="text-sm font-semibold text-zinc-950">{isClient ? "Default Route" : "Routing Table"}</h3>
+          <h3 className="text-sm font-semibold text-zinc-950">{capabilities.defaultRouteOnly ? "Default Route" : "Routing Table"}</h3>
           <button className={buttonClass("secondary")} type="button" onClick={() => onAddRoute(node.id)}>
-            {isClient ? "デフォルトルート追加" : "ルート追加"}
+            {capabilities.defaultRouteOnly ? "デフォルトルート追加" : "ルート追加"}
           </button>
         </div>
         {routes.length ? (
@@ -1944,9 +1784,10 @@ function NodeDetailsPanel({
                 </div>
               </div>
               <div className="grid gap-2 md:grid-cols-2">
-                <Field label="宛先">
+                <Field label={capabilities.defaultRouteOnly ? "宛先（固定）" : "宛先"}>
                   <input
                     className={inputClass}
+                    disabled={capabilities.defaultRouteOnly}
                     value={route.destination}
                     onChange={(event) => onUpdateRoute(route.id, { destination: event.target.value })}
                   />
@@ -1973,43 +1814,47 @@ function NodeDetailsPanel({
                     ))}
                   </select>
                 </Field>
-                <div className="grid grid-cols-2 gap-2">
-                  <Field label="metric">
-                    <input
-                      className={inputClass}
-                      min="0"
-                      type="number"
-                      value={route.metric}
-                      onChange={(event) => onUpdateRoute(route.id, { metric: Math.max(0, Number(event.target.value) || 0) })}
-                    />
-                  </Field>
-                  <Field label="AD">
-                    <input
-                      className={inputClass}
-                      min="0"
-                      type="number"
-                      value={route.administrative_distance ?? ""}
-                      onChange={(event) => onUpdateRoute(route.id, { administrative_distance: optionalNumber(event.target.value) })}
-                    />
-                  </Field>
-                </div>
-                <Field label="VRF">
-                  <input
-                    className={inputClass}
-                    value={route.vrf_id ?? ""}
-                    onChange={(event) => onUpdateRoute(route.id, { vrf_id: event.target.value })}
-                  />
-                </Field>
-                <Field label="VLAN">
-                  <input
-                    className={inputClass}
-                    min="1"
-                    max="4094"
-                    type="number"
-                    value={route.vlan_id ?? ""}
-                    onChange={(event) => onUpdateRoute(route.id, { vlan_id: optionalNumber(event.target.value) })}
-                  />
-                </Field>
+                {capabilities.defaultRouteOnly ? null : (
+                  <>
+                    <div className="grid grid-cols-2 gap-2">
+                      <Field label="metric">
+                        <input
+                          className={inputClass}
+                          min="0"
+                          type="number"
+                          value={route.metric}
+                          onChange={(event) => onUpdateRoute(route.id, { metric: Math.max(0, Number(event.target.value) || 0) })}
+                        />
+                      </Field>
+                      <Field label="AD">
+                        <input
+                          className={inputClass}
+                          min="0"
+                          type="number"
+                          value={route.administrative_distance ?? ""}
+                          onChange={(event) => onUpdateRoute(route.id, { administrative_distance: optionalNumber(event.target.value) })}
+                        />
+                      </Field>
+                    </div>
+                    <Field label="VRF">
+                      <input
+                        className={inputClass}
+                        value={route.vrf_id ?? ""}
+                        onChange={(event) => onUpdateRoute(route.id, { vrf_id: event.target.value })}
+                      />
+                    </Field>
+                    <Field label="VLAN">
+                      <input
+                        className={inputClass}
+                        min="1"
+                        max="4094"
+                        type="number"
+                        value={route.vlan_id ?? ""}
+                        onChange={(event) => onUpdateRoute(route.id, { vlan_id: optionalNumber(event.target.value) })}
+                      />
+                    </Field>
+                  </>
+                )}
               </div>
             </div>
           ))
@@ -2592,15 +2437,143 @@ function PolicyPanel({
   );
 }
 
-function NatPanel() {
+function NatPanel({
+  graph,
+  onAddNatRule,
+  onUpdateNatRule,
+  onDeleteNatRule,
+}: {
+  graph: GraphModel;
+  onAddNatRule: (nodeId: string) => void;
+  onUpdateNatRule: (ruleId: string, patch: Partial<NatRuleModel>) => void;
+  onDeleteNatRule: (ruleId: string) => void;
+}) {
+  const rules = graph.nat_rules ?? [];
+  const networkDevices = graph.nodes.filter((node) => nodeDeviceType(node) !== "client");
+  const [nodeFilter, setNodeFilter] = useState("");
+  const [newRuleNodeId, setNewRuleNodeId] = useState(networkDevices[0]?.id ?? "");
+  const filteredRules = rules.filter((rule) => nodeFilter ? rule.node_id === nodeFilter : true);
+
   return (
-    <div className="grid gap-3 p-4">
-      <div className="rounded-lg border border-zinc-200 bg-zinc-50 p-4">
-        <h3 className="text-sm font-semibold text-zinc-950">NAT</h3>
-        <p className="mt-2 text-sm text-zinc-600">
-          NAT はまだ未実装です。ここに NAT ルールの一覧、追加、削除、経路評価への反映を入れる想定です。
-        </p>
+    <div className="grid gap-4 p-4">
+      <div className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-zinc-200 bg-zinc-50 p-3">
+        <div>
+          <h3 className="text-sm font-semibold text-zinc-950">NAT</h3>
+          <p className="mt-1 text-xs text-zinc-500">{filteredRules.length} / {rules.length} rules</p>
+        </div>
+        <div className="flex flex-wrap items-center gap-2">
+          <span className="text-xs font-semibold text-zinc-500">表示</span>
+          <select className={inputClass} value={nodeFilter} onChange={(event) => setNodeFilter(event.target.value)}>
+            <option value="">すべて</option>
+            {networkDevices.map((node) => (
+              <option key={node.id} value={node.id}>{node.id}</option>
+            ))}
+          </select>
+          <span className="text-xs font-semibold text-zinc-500">追加先</span>
+          <select className={inputClass} value={newRuleNodeId} onChange={(event) => setNewRuleNodeId(event.target.value)}>
+            {networkDevices.map((node) => (
+              <option key={node.id} value={node.id}>{node.id}</option>
+            ))}
+          </select>
+          <button className={buttonClass("secondary")} disabled={!newRuleNodeId} type="button" onClick={() => onAddNatRule(newRuleNodeId)}>
+            追加
+          </button>
+        </div>
       </div>
+      {filteredRules.length ? (
+        <div className="overflow-x-auto rounded-lg border border-zinc-200 bg-white">
+          <table className="w-full min-w-[1560px] text-left text-xs">
+            <thead className="border-b border-zinc-200 bg-zinc-100 text-zinc-500">
+              <tr>
+                <th className="px-3 py-2 font-semibold">active</th>
+                <th className="px-3 py-2 font-semibold">id</th>
+                <th className="px-3 py-2 font-semibold">node</th>
+                <th className="px-3 py-2 font-semibold">interface</th>
+                <th className="px-3 py-2 font-semibold">direction</th>
+                <th className="px-3 py-2 font-semibold">type</th>
+                <th className="px-3 py-2 font-semibold">protocol</th>
+                <th className="px-3 py-2 font-semibold">port</th>
+                <th className="px-3 py-2 font-semibold">original</th>
+                <th className="px-3 py-2 font-semibold">translated</th>
+                <th className="whitespace-nowrap px-3 py-2 font-semibold">操作</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-zinc-100">
+              {filteredRules.map((rule) => (
+                <tr key={rule.id} className="align-top">
+                  <td className="px-3 py-2">
+                    <input checked={rule.active} type="checkbox" onChange={(event) => onUpdateNatRule(rule.id, { active: event.target.checked })} />
+                  </td>
+                  <td className="px-3 py-2 whitespace-nowrap font-mono text-zinc-700">{rule.id}</td>
+                  <td className="px-3 py-2">
+                    <select className={inputClass} value={rule.node_id} onChange={(event) => onUpdateNatRule(rule.id, { node_id: event.target.value, interface_id: undefined })}>
+                      {networkDevices.map((node) => (
+                        <option key={node.id} value={node.id}>{node.id}</option>
+                      ))}
+                    </select>
+                  </td>
+                  <td className="px-3 py-2">
+                    <select className={inputClass} value={rule.interface_id ?? ""} onChange={(event) => onUpdateNatRule(rule.id, { interface_id: event.target.value || undefined })}>
+                      <option value="">node-wide</option>
+                      {graph.interfaces
+                        .filter((interfaceItem) => interfaceItem.node_id === rule.node_id)
+                        .map((interfaceItem) => (
+                          <option key={interfaceItem.id} value={interfaceItem.id}>{interfaceLabel(graph, interfaceItem.id)}</option>
+                        ))}
+                    </select>
+                  </td>
+                  <td className="px-3 py-2">
+                    <select className={inputClass} value={rule.direction} onChange={(event) => onUpdateNatRule(rule.id, { direction: event.target.value as NatRuleModel["direction"] })}>
+                      <option value="ingress">ingress</option>
+                      <option value="egress">egress</option>
+                    </select>
+                  </td>
+                  <td className="px-3 py-2">
+                    <select className={inputClass} value={rule.nat_type} onChange={(event) => onUpdateNatRule(rule.id, { nat_type: event.target.value as NatRuleModel["nat_type"] })}>
+                      <option value="source">source</option>
+                      <option value="destination">destination</option>
+                    </select>
+                  </td>
+                  <td className="px-3 py-2">
+                    <select
+                      className={inputClass}
+                      value={rule.protocol ?? "any"}
+                      onChange={(event) => onUpdateNatRule(rule.id, { protocol: event.target.value as PolicyProtocol, port: event.target.value === "tcp" || event.target.value === "udp" ? rule.port : undefined })}
+                    >
+                      <option value="any">any</option>
+                      <option value="icmp">ICMP</option>
+                      <option value="tcp">TCP</option>
+                      <option value="udp">UDP</option>
+                    </select>
+                  </td>
+                  <td className="px-3 py-2">
+                    <input
+                      className={inputClass}
+                      disabled={rule.protocol === "any" || rule.protocol === "icmp" || !rule.protocol}
+                      min="1"
+                      max="65535"
+                      type="number"
+                      value={rule.protocol === "tcp" || rule.protocol === "udp" ? rule.port ?? "" : ""}
+                      onChange={(event) => onUpdateNatRule(rule.id, { port: optionalNumber(event.target.value) })}
+                    />
+                  </td>
+                  <td className="px-3 py-2">
+                    <input className={inputClass} value={rule.original} onChange={(event) => onUpdateNatRule(rule.id, { original: event.target.value })} />
+                  </td>
+                  <td className="px-3 py-2">
+                    <input className={inputClass} value={rule.translated} onChange={(event) => onUpdateNatRule(rule.id, { translated: event.target.value })} />
+                  </td>
+                  <td className="whitespace-nowrap px-3 py-2">
+                    <button className={cn(buttonClass("danger"), "whitespace-nowrap")} type="button" onClick={() => onDeleteNatRule(rule.id)}>削除</button>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      ) : (
+        <EmptyMessage>表示対象のNATルールはありません。</EmptyMessage>
+      )}
     </div>
   );
 }
@@ -2796,128 +2769,6 @@ function Badge({
   );
 }
 
-function applyRuntimeState(
-  graph: GraphModel,
-  downNodeIds: Set<string>,
-  downInterfaceIds: Set<string>
-): GraphModel {
-  const interfaceById = new Map(
-    graph.interfaces.map((interfaceItem) => [interfaceItem.id, interfaceItem])
-  );
-
-  return {
-    ...graph,
-    links: graph.links.map((link) => {
-      const fromNodeId = interfaceById.get(link.from_interface)?.node_id;
-      const toNodeId = interfaceById.get(link.to_interface)?.node_id;
-      const downByNode =
-        (fromNodeId ? downNodeIds.has(fromNodeId) : false) ||
-        (toNodeId ? downNodeIds.has(toNodeId) : false);
-      const downByInterface =
-        downInterfaceIds.has(link.from_interface) || downInterfaceIds.has(link.to_interface);
-
-      return downByNode || downByInterface ? { ...link, active: false } : link;
-    }),
-  };
-}
-
-function toggleSetValue(values: Set<string>, value: string) {
-  const nextValues = new Set(values);
-  if (nextValues.has(value)) {
-    nextValues.delete(value);
-  } else {
-    nextValues.add(value);
-  }
-  return nextValues;
-}
-
-function buildTrafficIntent(
-  graph: GraphModel,
-  fromInterface: string,
-  toInterface: string,
-  protocol: TrafficProtocol,
-  port: number | undefined,
-  reachable: boolean,
-  viaNodeId: string
-): TrafficIntent {
-  const normalizedPort = protocol === "icmp" ? undefined : normalizeTransportPort(port);
-  return {
-    source_node_id: nodeIdForInterface(graph, fromInterface) ?? fromInterface,
-    destination_node_id: nodeIdForInterface(graph, toInterface) ?? toInterface,
-    protocol,
-    port: normalizedPort,
-    expectations: {
-      reachable,
-      via_node_id: viaNodeId || undefined,
-      strict_path: false,
-    },
-  };
-}
-
-function buildTrafficSpec(
-  graph: GraphModel,
-  fromInterface: string,
-  toInterface: string,
-  protocol: TrafficProtocol,
-  port: number | undefined
-): RouteRequest["traffic"] {
-  return {
-    protocol,
-    port: protocol === "icmp" ? undefined : normalizeTransportPort(port),
-    source: graph.interfaces.find((interfaceItem) => interfaceItem.id === fromInterface)?.ip_address,
-    destination: graph.interfaces.find((interfaceItem) => interfaceItem.id === toInterface)?.ip_address,
-  };
-}
-
-function normalizeTransportPort(port: number | undefined) {
-  if (typeof port !== "number" || !Number.isInteger(port)) {
-    return 1;
-  }
-  return clamp(port, 1, 65535);
-}
-
-function nodeIdForInterface(graph: GraphModel, interfaceId: string) {
-  return graph.interfaces.find((interfaceItem) => interfaceItem.id === interfaceId)?.node_id;
-}
-
-function linkNodeIds(graph: GraphModel, link: LinkModel) {
-  return [
-    nodeIdForInterface(graph, link.from_interface),
-    nodeIdForInterface(graph, link.to_interface),
-  ].filter((nodeId): nodeId is string => Boolean(nodeId));
-}
-
-function interfaceLabel(graph: GraphModel, interfaceId: string) {
-  const interfaceItem = graph.interfaces.find((item) => item.id === interfaceId);
-  return interfaceItem?.ip_address ? `${interfaceId} (${interfaceItem.ip_address})` : interfaceId;
-}
-
-function interfaceIpAddress(value: string) {
-  return value.split("/")[0] ?? value;
-}
-
-function interfacePrefixLength(value: string) {
-  const prefixLength = Number(value.split("/")[1]);
-  return Number.isInteger(prefixLength) ? prefixLength : undefined;
-}
-
-function linkCostFromBandwidth(bandwidthMbps: number, referenceBandwidthMbps = 100000) {
-  if (!Number.isFinite(bandwidthMbps) || bandwidthMbps <= 0) {
-    return 1;
-  }
-  return Math.max(1, Math.ceil(referenceBandwidthMbps / bandwidthMbps));
-}
-
-function formatBandwidth(bandwidthMbps: number | undefined) {
-  if (!bandwidthMbps) {
-    return "-";
-  }
-  if (bandwidthMbps >= 1000) {
-    return `${bandwidthMbps / 1000}Gbps`;
-  }
-  return `${bandwidthMbps}Mbps`;
-}
-
 function trafficLabel(intent: TrafficIntent) {
   const protocol = intent.protocol.toUpperCase();
   return intent.port ? `${protocol}/${intent.port}` : protocol;
@@ -2933,7 +2784,8 @@ function evaluationItem(
   return {
     label,
     expected,
-    actual: detail ? `${actual} (${detail})` : actual,
+    actual,
+    detail,
     status,
   };
 }
@@ -2948,21 +2800,27 @@ function viaEvaluationItem(expectedVia: string, routeNodeIds: string[], strictPa
   };
 }
 
+function natEvaluationItem(_intent: TrafficIntent, response: Extract<RouteResponse, { ok: true }>): EvaluationItem {
+  const actualSource = response.translated_source;
+  const actualDestination = response.translated_destination;
+  const matchedRules = response.matched_nat_rule_ids ?? [];
+  const actual = actualSource || actualDestination ? `source ${actualSource ?? "-"} / destination ${actualDestination ?? "-"}` : "変換なし";
+
+  return {
+    label: "NAT",
+    expected: "到達性判定の補足",
+    actual,
+    detail: matchedRules.join(" -> ") || undefined,
+    status: "not_applicable",
+  };
+}
+
 function notApplicableItem(label: string, reason: string): EvaluationItem {
   return {
     label,
     expected: "-",
     actual: reason,
     status: "not_applicable",
-  };
-}
-
-function notImplementedItem(label: string): EvaluationItem {
-  return {
-    label,
-    expected: "-",
-    actual: "未評価",
-    status: "not_implemented",
   };
 }
 
@@ -2997,628 +2855,6 @@ function evaluationStatusLabel(status: EvaluationItem["status"]) {
     return "未評価";
   }
   return status;
-}
-
-function routeSegmentsFromPath(path: string[], graph: GraphModel) {
-  const interfaceById = new Map(
-    graph.interfaces.map((interfaceItem) => [interfaceItem.id, interfaceItem])
-  );
-  const linkByEdge = new Map(
-    graph.links.map((link) => [edgeKey(link.from_interface, link.to_interface), link])
-  );
-  const compactPath = compactInternalHops(path, graph);
-
-  return compactPath.flatMap((fromInterfaceId, index) => {
-    const toInterfaceId = compactPath[index + 1];
-    if (!toInterfaceId) {
-      return [];
-    }
-
-    const link = linkByEdge.get(edgeKey(fromInterfaceId, toInterfaceId));
-    const fromNodeId = interfaceById.get(fromInterfaceId)?.node_id;
-    const toNodeId = interfaceById.get(toInterfaceId)?.node_id;
-    if (!link || !fromNodeId || !toNodeId) {
-      return [];
-    }
-
-    return [{ link, fromNodeId, toNodeId }];
-  });
-}
-
-function nodeIdsFromPath(path: string[], graph: GraphModel) {
-  const interfaceById = new Map(
-    graph.interfaces.map((interfaceItem) => [interfaceItem.id, interfaceItem])
-  );
-  const nodeIds = compactInternalHops(path, graph).flatMap((interfaceId) => {
-    const nodeId = interfaceById.get(interfaceId)?.node_id;
-    return nodeId ? [nodeId] : [];
-  });
-
-  return nodeIds.filter((nodeId, index) => nodeId !== nodeIds[index - 1]);
-}
-
-function virtualIpForInterface(graph: GraphModel, interfaceId: string) {
-  const nodeId = graph.interfaces.find((interfaceItem) => interfaceItem.id === interfaceId)?.node_id;
-  return (graph.virtual_ips ?? []).find((virtualIp) => virtualIp.service_node_id === nodeId);
-}
-
-function graphGroups(graph: GraphModel) {
-  const groups = graph.groups?.length ? graph.groups : defaultGroups;
-  const knownGroupIds = new Set(groups.map((group) => group.id));
-  const missingGroups = graph.nodes
-    .map(nodeGroupId)
-    .filter((groupId, index, groupIds) => !knownGroupIds.has(groupId) && groupIds.indexOf(groupId) === index)
-    .map((groupId) => ({ id: groupId, label: groupId }));
-
-  return [...groups, ...missingGroups];
-}
-
-function nodeGroupId(node: NodeModel) {
-  return node.group_id ?? node.layer ?? "core";
-}
-
-function nodeDeviceType(node: NodeModel): NodeDeviceType {
-  return node.device_type ?? "network_device";
-}
-
-function nodeDeviceTypeLabel(deviceType: NodeDeviceType) {
-  return deviceType === "client" ? "Client" : "Network Device";
-}
-
-function groupLabel(graph: GraphModel, groupId: string) {
-  return graphGroups(graph).find((group) => group.id === groupId)?.label ?? groupId;
-}
-
-function sanitizeClassName(value: string) {
-  return value.replaceAll(/[^a-zA-Z0-9_-]/g, "-");
-}
-
-function buildLayout(graph: GraphModel, direction: LayoutDirection) {
-  const layout = new Map<string, { x: number; y: number }>();
-  const groups = graphGroups(graph);
-  const groupWidth = 700 / Math.max(groups.length, 1);
-  const groupHeight = 404 / Math.max(groups.length, 1);
-
-  groups.forEach((group, groupIndex) => {
-    const nodes = graph.nodes.filter((node) => nodeGroupId(node) === group.id);
-    nodes.forEach((node, index) => {
-      const verticalSpacing = 340 / Math.max(nodes.length, 1);
-      const horizontalSpacing = 620 / Math.max(nodes.length, 1);
-      const autoX =
-        direction === "lr"
-          ? 30 + groupIndex * groupWidth + Math.max(92, groupWidth - 30) / 2
-          : 70 + horizontalSpacing / 2 + index * horizontalSpacing;
-      const autoY =
-        direction === "lr"
-          ? 70 + verticalSpacing / 2 + index * verticalSpacing
-          : 24 + groupIndex * groupHeight + Math.max(72, groupHeight - 18) / 2 + 10;
-      layout.set(node.id, {
-        x: node.x ?? autoX,
-        y: node.y ?? autoY,
-      });
-    });
-  });
-
-  return layout;
-}
-
-function nodeLabelLines(nodeId: string) {
-  const segments = nodeId.split(/[-_]/).filter(Boolean);
-  if (segments.length <= 1) {
-    return [shortenNodeLabel(nodeId)];
-  }
-
-  return [shortenNodeLabel(segments[0]), shortenNodeLabel(segments.at(-1) ?? "")];
-}
-
-function shortenNodeLabel(label: string) {
-  const maxLength = 8;
-  if (label.length <= maxLength) {
-    return label;
-  }
-
-  return `${label.slice(0, maxLength - 3)}...`;
-}
-
-function linkGeometry(from: { x: number; y: number }, to: { x: number; y: number }) {
-  return {
-    path: `M ${from.x} ${from.y} L ${to.x} ${to.y}`,
-  };
-}
-
-function routeDirectionsFromPath(routeResponse: RouteResponse | null, graph: GraphModel) {
-  const edges = new Map<string, RouteEdgeDirection>();
-  if (!routeResponse?.ok) {
-    return edges;
-  }
-
-  for (const path of routeResponse.equal_cost_paths ?? [routeResponse.path]) {
-    const compactPath = compactInternalHops(path, graph);
-    for (let index = 0; index < compactPath.length - 1; index += 1) {
-      const fromInterface = compactPath[index];
-      const toInterface = compactPath[index + 1];
-      const key = edgeKey(fromInterface, toInterface);
-      if (!edges.has(key)) {
-        edges.set(key, {
-          from_interface: fromInterface,
-          to_interface: toInterface,
-        });
-      }
-    }
-  }
-  return edges;
-}
-
-function interfaceIdsFromPath(routeResponse: RouteResponse | null) {
-  if (!routeResponse?.ok) {
-    return new Set<string>();
-  }
-  return new Set((routeResponse.equal_cost_paths ?? [routeResponse.path]).flat());
-}
-
-function nodeIdsFromRoute(routeResponse: RouteResponse | null, graph: GraphModel) {
-  if (!routeResponse?.ok) {
-    return new Set<string>();
-  }
-  return new Set(
-    (routeResponse.equal_cost_paths ?? [routeResponse.path]).flatMap((path) => nodeIdsFromPath(path, graph))
-  );
-}
-
-function loopLinkIdsFromRoute(routeResponse: RouteResponse | null, graph: GraphModel) {
-  const loopLinkIds = new Set<string>();
-  if (!routeResponse?.ok) {
-    return loopLinkIds;
-  }
-  for (const linkId of routeResponse.loop_link_ids ?? []) {
-    loopLinkIds.add(linkId);
-  }
-
-  const interfaceById = new Map(
-    graph.interfaces.map((interfaceItem) => [interfaceItem.id, interfaceItem])
-  );
-  const linkByEdge = new Map(
-    graph.links.map((link) => [edgeKey(link.from_interface, link.to_interface), link])
-  );
-
-  for (const path of routeResponse.equal_cost_paths ?? [routeResponse.path]) {
-    const compactPath = compactInternalHops(path, graph);
-    const lastIndexByNodeId = new Map<string, number>();
-
-    compactPath.forEach((interfaceId, index) => {
-      const nodeId = interfaceById.get(interfaceId)?.node_id;
-      if (!nodeId) {
-        return;
-      }
-
-      const previousIndex = lastIndexByNodeId.get(nodeId);
-      if (previousIndex !== undefined) {
-        for (let segmentIndex = previousIndex; segmentIndex < index; segmentIndex += 1) {
-          const fromInterfaceId = compactPath[segmentIndex];
-          const toInterfaceId = compactPath[segmentIndex + 1];
-          const link = toInterfaceId
-            ? linkByEdge.get(edgeKey(fromInterfaceId, toInterfaceId))
-            : undefined;
-          if (link) {
-            loopLinkIds.add(link.id);
-          }
-        }
-      }
-
-      lastIndexByNodeId.set(nodeId, index);
-    });
-  }
-
-  return loopLinkIds;
-}
-
-function compactInternalHops(path: string[], graph: GraphModel) {
-  const interfaceById = new Map(
-    graph.interfaces.map((interfaceItem) => [interfaceItem.id, interfaceItem])
-  );
-
-  return path.filter((interfaceId, index) => {
-    const previous = path[index - 1];
-    const next = path[index + 1];
-    if (!previous || !next) {
-      return true;
-    }
-
-    const currentInterface = interfaceById.get(interfaceId);
-    const previousInterface = interfaceById.get(previous);
-    const nextInterface = interfaceById.get(next);
-    return !(
-      currentInterface &&
-      previousInterface &&
-      nextInterface &&
-      currentInterface.node_id === previousInterface.node_id &&
-      currentInterface.node_id === nextInterface.node_id
-    );
-  });
-}
-
-function edgeKey(a: string, b: string) {
-  return [a, b].sort().join("::");
-}
-
-function clamp(value: number, min: number, max: number) {
-  return Math.min(max, Math.max(min, value));
-}
-
-function optionalNumber(value: string) {
-  const parsed = Number(value);
-  return value.trim() && Number.isFinite(parsed) ? parsed : undefined;
-}
-
-function parseTopologyText(input: string, fileName: string): InputGraphModel | InputRouteRequest {
-  const isYaml = /\.(ya?ml)$/i.test(fileName);
-  const parsed = isYaml ? parseYaml(input) : JSON.parse(input);
-  if (!isRecord(parsed)) {
-    throw new Error("トポロジJSON/YAMLが不正です");
-  }
-  return parsed as InputGraphModel | InputRouteRequest;
-}
-
-function routeRequestOrGraphToGraph(parsed: InputGraphModel | InputRouteRequest): GraphModel {
-  const nextGraph = "graph" in parsed ? parsed.graph : parsed;
-  if (!isRecord(nextGraph) || !Array.isArray(nextGraph.nodes) || !Array.isArray(nextGraph.interfaces) || !Array.isArray(nextGraph.links)) {
-    throw new Error("nodes/interfaces/links を持つGraphModelまたはRouteRequestを指定してください");
-  }
-  return normalizeGraphModel(nextGraph);
-}
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null;
-}
-
-function downloadTextFile(fileName: string, text: string, type: string) {
-  const url = URL.createObjectURL(new Blob([text], { type }));
-  const anchor = document.createElement("a");
-  anchor.href = url;
-  anchor.download = fileName;
-  anchor.click();
-  URL.revokeObjectURL(url);
-}
-
-function serializableGraph(graph: GraphModel): GraphModel {
-  return JSON.parse(JSON.stringify(graph)) as GraphModel;
-}
-
-function exportableGraph(graph: GraphModel) {
-  const { interfaces, ...rest } = serializableGraph(graph);
-  return JSON.parse(JSON.stringify({
-    ...rest,
-    interfaces: interfacesToYangNodes(interfaces),
-  }));
-}
-
-function normalizeGraphModel(graph: InputGraphModel): GraphModel {
-  return {
-    ...graph,
-    interfaces: interfaceEntriesFromInput(graph.interfaces),
-  };
-}
-
-function interfaceEntriesFromInput(interfaces: InterfaceModel[] | YangInterfaceNodeModel[]): InterfaceModel[] {
-  if (!interfaces.length || "id" in interfaces[0]) {
-    return interfaces as InterfaceModel[];
-  }
-
-  return (interfaces as YangInterfaceNodeModel[]).flatMap((nodeInterfaces) =>
-    nodeInterfaces.interfaces.interface.map((interfaceItem) => {
-      const address = interfaceItem.ipv4?.address?.[0];
-      return {
-        id: interfaceItem.name,
-        node_id: nodeInterfaces.node_id,
-        ip_address: address
-          ? `${address.ip}${typeof address.prefix_length === "number" ? `/${address.prefix_length}` : ""}`
-          : undefined,
-      };
-    })
-  );
-}
-
-function interfacesToYangNodes(interfaces: InterfaceModel[]): YangInterfaceNodeModel[] {
-  const interfacesByNode = new Map<string, InterfaceModel[]>();
-  for (const interfaceItem of interfaces) {
-    interfacesByNode.set(interfaceItem.node_id, [...(interfacesByNode.get(interfaceItem.node_id) ?? []), interfaceItem]);
-  }
-
-  return [...interfacesByNode.entries()].map(([nodeId, nodeInterfaces]) => ({
-    node_id: nodeId,
-    interfaces: {
-      interface: nodeInterfaces.map((interfaceItem) => ({
-        name: interfaceItem.id,
-        enabled: true,
-        ipv4: interfaceItem.ip_address
-          ? {
-              address: [
-                {
-                  ip: interfaceIpAddress(interfaceItem.ip_address),
-                  prefix_length: interfacePrefixLength(interfaceItem.ip_address),
-                },
-              ],
-            }
-          : undefined,
-      })),
-    },
-  }));
-}
-
-function graphWithRoutes(graph: GraphModel, routes: RouteEntryModel[]): GraphModel {
-  const { routes: _routes, ...rest } = graph;
-  return {
-    ...rest,
-    routing: routesToYangRouting(routes.map(cleanRouteEntry)),
-  };
-}
-
-function routeEntriesFromGraph(graph: GraphModel): RouteEntryModel[] {
-  if (!graph.routing?.length) {
-    return graph.routes ?? [];
-  }
-
-  return graph.routing.flatMap((nodeRouting) =>
-    nodeRouting.routing.control_plane_protocols.flatMap((protocol) =>
-      protocol.static_routes.ipv4.map((route) => ({
-        id: route.name,
-        node_id: nodeRouting.node_id,
-        destination: route.destination_prefix,
-        next_hop: route.next_hop?.next_hop_node ?? route.next_hop?.next_hop_address,
-        egress_interface: route.next_hop?.outgoing_interface,
-        metric: route.metric,
-        administrative_distance: route.administrative_distance,
-        vrf_id: route.vrf_id,
-        vlan_id: route.vlan_id,
-        active: route.active,
-      }))
-    )
-  );
-}
-
-function routesToYangRouting(routes: RouteEntryModel[]): YangRoutingModel[] {
-  const routesByNodeId = new Map<string, RouteEntryModel[]>();
-  for (const route of routes) {
-    routesByNodeId.set(route.node_id, [...(routesByNodeId.get(route.node_id) ?? []), route]);
-  }
-
-  return [...routesByNodeId.entries()].map(([nodeId, nodeRoutes]) => ({
-    node_id: nodeId,
-    routing: {
-      control_plane_protocols: [
-        {
-          type: "static",
-          name: "static",
-          static_routes: {
-            ipv4: nodeRoutes.map((route) => ({
-              name: route.id,
-              destination_prefix: route.destination,
-              next_hop: (route.next_hop || route.egress_interface)
-                ? {
-                    next_hop_node: route.next_hop,
-                    outgoing_interface: route.egress_interface,
-                  }
-                : undefined,
-              metric: route.metric,
-              administrative_distance: route.administrative_distance,
-              vrf_id: route.vrf_id,
-              vlan_id: route.vlan_id,
-              active: route.active,
-            })),
-          },
-        },
-      ],
-    },
-  }));
-}
-
-function graphWithPolicies(graph: GraphModel, policies: PolicyRuleModel[]): GraphModel {
-  const { policies: _policies, ...rest } = graph;
-  return {
-    ...rest,
-    acls: policiesToYangAcls(policies.map(cleanPolicyRule)),
-    acl_attachments: policiesToYangAclAttachments(policies.map(cleanPolicyRule)),
-  };
-}
-
-function policyRulesFromGraph(graph: GraphModel): PolicyRuleModel[] {
-  if (!graph.acls?.length) {
-    return graph.policies ?? [];
-  }
-
-  const aclByName = new Map(graph.acls.map((acl) => [acl.name, acl]));
-  return (graph.acl_attachments ?? []).flatMap((attachment) =>
-    (["ingress", "egress"] as const).flatMap((direction) =>
-      (attachment[direction] ?? []).flatMap((aclName) => {
-        const acl = aclByName.get(aclName);
-        return (acl?.aces ?? []).map((ace) => {
-          const protocol = policyProtocolFromAce(ace);
-          return {
-            id: policyRuleId(attachment.node_id, attachment.interface_id, direction, aclName, ace.name),
-            node_id: attachment.node_id,
-            interface_id: attachment.interface_id,
-            acl_name: aclName,
-            ace_name: ace.name,
-            name: ace.name,
-            direction,
-            action: ace.actions.forwarding === "accept" ? "permit" : "deny",
-            protocol,
-            source: ace.matches.ipv4?.source_ipv4_network ?? "any",
-            destination: ace.matches.ipv4?.destination_ipv4_network ?? "any",
-            port: policyPortFromAce(ace),
-            active: ace.active ?? true,
-          } satisfies PolicyRuleModel;
-        });
-      })
-    )
-  );
-}
-
-function policiesToYangAcls(policies: PolicyRuleModel[]): YangAclModel[] {
-  const policiesByAclName = new Map<string, PolicyRuleModel[]>();
-  for (const policy of policies) {
-    policiesByAclName.set(policy.acl_name, [...(policiesByAclName.get(policy.acl_name) ?? []), policy]);
-  }
-
-  return [...policiesByAclName.entries()].map(([aclName, aclPolicies]) => ({
-    name: aclName,
-    type: "ipv4-acl",
-    aces: aclPolicies.map((policy) => ({
-      name: policy.ace_name,
-      active: policy.active,
-      matches: {
-        ipv4: {
-          source_ipv4_network: policy.source === "any" ? undefined : policy.source,
-          destination_ipv4_network: policy.destination === "any" ? undefined : policy.destination,
-        },
-        tcp: policy.protocol === "tcp" && policy.port
-          ? { destination_port: { operator: "eq", port: policy.port } }
-          : undefined,
-        udp: policy.protocol === "udp" && policy.port
-          ? { destination_port: { operator: "eq", port: policy.port } }
-          : undefined,
-        icmp: policy.protocol === "icmp" ? {} : undefined,
-      },
-      actions: {
-        forwarding: policy.action === "permit" ? "accept" : "drop",
-      },
-    })),
-  }));
-}
-
-function policiesToYangAclAttachments(policies: PolicyRuleModel[]): YangAclAttachmentModel[] {
-  const attachmentsByNodeId = new Map<string, YangAclAttachmentModel>();
-  for (const policy of policies) {
-    const attachmentKey = `${policy.node_id}::${policy.interface_id ?? ""}`;
-    const attachment = attachmentsByNodeId.get(attachmentKey) ?? {
-      node_id: policy.node_id,
-      interface_id: policy.interface_id,
-    };
-    const aclNames = attachment[policy.direction] ?? [];
-    if (!aclNames.includes(policy.acl_name)) {
-      attachment[policy.direction] = [...aclNames, policy.acl_name];
-    }
-    attachmentsByNodeId.set(attachmentKey, attachment);
-  }
-  return [...attachmentsByNodeId.values()];
-}
-
-function policyProtocolFromAce(ace: YangAclModel["aces"][number]): PolicyProtocol {
-  if (ace.matches.tcp) {
-    return "tcp";
-  }
-  if (ace.matches.udp) {
-    return "udp";
-  }
-  if (ace.matches.icmp) {
-    return "icmp";
-  }
-  return "any";
-}
-
-function policyPortFromAce(ace: YangAclModel["aces"][number]) {
-  return ace.matches.tcp?.destination_port?.port ?? ace.matches.udp?.destination_port?.port;
-}
-
-function policyRuleId(nodeId: string, interfaceId: string | undefined, direction: string, aclName: string, aceName: string) {
-  return `${nodeId}::${interfaceId ?? "node"}::${direction}::${aclName}::${aceName}`;
-}
-
-function linkEndpointInterfaceId(linkId: string, nodeId: string) {
-  return `${nodeId}-${linkId}-if`.replaceAll(/[^a-zA-Z0-9-]+/g, "-");
-}
-
-function cleanRouteEntry(route: RouteEntryModel): RouteEntryModel {
-  return {
-    ...route,
-    next_hop: route.next_hop?.trim() || undefined,
-    egress_interface: route.egress_interface?.trim() || undefined,
-    vrf_id: route.vrf_id?.trim() || undefined,
-    administrative_distance: Number.isFinite(route.administrative_distance) ? route.administrative_distance : undefined,
-    vlan_id: Number.isFinite(route.vlan_id) ? route.vlan_id : undefined,
-  };
-}
-
-function cleanPolicyRule(policy: PolicyRuleModel): PolicyRuleModel {
-  const protocol = policy.protocol;
-  const aceName = policy.name?.trim() || policy.ace_name || "policy";
-  return {
-    ...policy,
-    name: aceName,
-    ace_name: aceName,
-    acl_name: policy.acl_name.trim() || `${policy.node_id}-${policy.direction}`,
-    source: policy.source.trim() || "any",
-    destination: policy.destination.trim() || "any",
-    port: protocol === "tcp" || protocol === "udp" ? normalizeTransportPort(policy.port) : undefined,
-  };
-}
-
-function uniqueRouteId(graph: GraphModel, nodeId: string) {
-  const base = `${nodeId}-route`.replaceAll(/[^a-zA-Z0-9-]+/g, "-");
-  let candidate = base;
-  let suffix = 2;
-
-  while (routeEntriesFromGraph(graph).some((route) => route.id === candidate)) {
-    candidate = `${base}-${suffix}`;
-    suffix += 1;
-  }
-
-  return candidate;
-}
-
-function uniquePolicyId(graph: GraphModel, nodeId: string) {
-  const base = `${nodeId}-policy`.replaceAll(/[^a-zA-Z0-9-]+/g, "-");
-  let candidate = base;
-  let suffix = 2;
-
-  while (policyRulesFromGraph(graph).some((policy) => policy.id === candidate || policy.ace_name === candidate)) {
-    candidate = `${base}-${suffix}`;
-    suffix += 1;
-  }
-
-  return candidate;
-}
-
-function uniqueLinkId(graph: GraphModel, fromInterface: string, toInterface: string) {
-  const base = `${fromInterface}-to-${toInterface}`.replaceAll(/[^a-zA-Z0-9-]+/g, "-");
-  let candidate = base;
-  let suffix = 2;
-
-  while (graph.links.some((link) => link.id === candidate)) {
-    candidate = `${base}-${suffix}`;
-    suffix += 1;
-  }
-
-  return candidate;
-}
-
-function interfaceForNewLinkEndpoint(graph: GraphModel, nodeId: string, linkId: string) {
-  const node = graph.nodes.find((nodeItem) => nodeItem.id === nodeId);
-  if (node && nodeDeviceType(node) === "client") {
-    const interfaces = graph.interfaces.filter((interfaceItem) => interfaceItem.node_id === nodeId);
-    const interfaceIds = new Set(interfaces.map((interfaceItem) => interfaceItem.id));
-    const alreadyConnected = graph.links.some(
-      (link) => interfaceIds.has(link.from_interface) || interfaceIds.has(link.to_interface)
-    );
-    if (alreadyConnected) {
-      return undefined;
-    }
-    return interfaces[0]?.id ?? uniqueInterfaceId(graph, nodeId, linkId);
-  }
-  return uniqueInterfaceId(graph, nodeId, linkId);
-}
-
-function uniqueInterfaceId(graph: GraphModel, nodeId: string, linkId: string) {
-  const base = linkEndpointInterfaceId(linkId, nodeId);
-  let candidate = base;
-  let suffix = 2;
-
-  while (graph.interfaces.some((interfaceItem) => interfaceItem.id === candidate)) {
-    candidate = `${base}-${suffix}`;
-    suffix += 1;
-  }
-
-  return candidate;
 }
 
 function buttonClass(variant: "primary" | "secondary" | "success" | "danger" = "primary") {
