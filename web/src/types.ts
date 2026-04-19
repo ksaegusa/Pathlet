@@ -1,6 +1,8 @@
 export type NodeModel = {
   id: string;
   device_type?: NodeDeviceType;
+  default_vrf_id?: string;
+  default_vlan_id?: number;
   group_id?: string;
   layer?: NetworkLayer;
   x?: number;
@@ -19,6 +21,8 @@ export type InterfaceModel = {
   id: string;
   node_id: string;
   ip_address?: string;
+  vrf_id?: string;
+  vlan_id?: number;
 };
 
 export type YangInterfaceNodeModel = {
@@ -32,6 +36,8 @@ export type YangInterfaceModel = {
   name: string;
   type?: string;
   enabled?: boolean;
+  vrf_id?: string;
+  vlan_id?: number;
   ipv4?: {
     address?: Array<{
       ip: string;
@@ -45,6 +51,7 @@ export type LinkModel = {
   from_interface: string;
   to_interface: string;
   bandwidth_mbps?: number;
+  vlan_id?: number;
   cost: number;
   active: boolean;
 };
@@ -248,7 +255,7 @@ export type RouteMode = "shortest_path" | "routing_table";
 export type RouteStatus = "reachable" | "unreachable" | "loop" | "no_route" | "blackhole" | "policy_denied";
 export type ReachabilityScope = "round_trip" | "forward_only";
 export type InterfaceDisplayMode = "compact" | "detail";
-export type ActiveModal = "link" | "links" | "graph" | "node";
+export type ActiveModal = "link" | "links" | "graph" | "node" | "test";
 
 export type TrafficIntent = {
   source_node_id: string;

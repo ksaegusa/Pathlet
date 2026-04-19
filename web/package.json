@@ -1,7 +1,7 @@
 {
   "name": "pathlet-web",
   "private": true,
-  "version": "0.2.0",
+  "version": "0.3.0",
   "type": "module",
   "scripts": {
     "build:wasm": "cd ../crates/wasm && wasm-pack build --target web --out-dir ../../web/src/wasm",

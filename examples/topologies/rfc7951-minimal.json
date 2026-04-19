@@ -1,0 +1,83 @@
+{
+  "pathlet:nodes": [
+    {
+      "id": "r1",
+      "pathlet:device-type": "network_device",
+      "pathlet:default-vrf-id": "blue",
+      "pathlet:default-vlan-id": 100
+    },
+    {
+      "id": "r2",
+      "pathlet:device-type": "network_device",
+      "pathlet:default-vrf-id": "blue",
+      "pathlet:default-vlan-id": 100
+    }
+  ],
+  "ietf-interfaces:interfaces": {
+    "interface": [
+      {
+        "name": "r1-eth0",
+        "pathlet:node-id": "r1",
+        "pathlet:vrf-id": "blue",
+        "pathlet:vlan-id": 100,
+        "ietf-ip:ipv4": {
+          "address": [
+            {
+              "ip": "10.0.0.1",
+              "prefix-length": 24
+            }
+          ]
+        }
+      },
+      {
+        "name": "r2-eth0",
+        "pathlet:node-id": "r2",
+        "pathlet:vrf-id": "blue",
+        "pathlet:vlan-id": 100,
+        "ietf-ip:ipv4": {
+          "address": [
+            {
+              "ip": "10.0.0.2",
+              "prefix-length": 24
+            }
+          ]
+        }
+      }
+    ]
+  },
+  "pathlet:links": [
+    {
+      "id": "r1-r2",
+      "pathlet:from-interface": "r1-eth0",
+      "pathlet:to-interface": "r2-eth0",
+      "pathlet:vlan-id": 100,
+      "pathlet:cost": 10,
+      "pathlet:active": true
+    }
+  ],
+  "ietf-routing:routing": {
+    "control-plane-protocols": {
+      "control-plane-protocol": [
+        {
+          "type": "static",
+          "name": "static",
+          "pathlet:node-id": "r1",
+          "static-routes": {
+            "ipv4": [
+              {
+                "name": "r1-to-r2",
+                "destination-prefix": "r2",
+                "pathlet:next-hop-node": "r2",
+                "outgoing-interface": "r1-eth0",
+                "metric": 10,
+                "pathlet:vrf-id": "blue",
+                "pathlet:vlan-id": 100,
+                "pathlet:active": true
+              }
+            ]
+          }
+        }
+      ]
+    }
+  }
+}

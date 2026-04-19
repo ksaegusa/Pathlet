@@ -2,339 +2,479 @@
   "nodes": [
     {
       "id": "osaka-office",
-      "layer": "access"
+      "layer": "access",
+      "default_vrf_id": "corp",
+      "default_vlan_id": 100
     },
     {
       "id": "tokyo-office",
-      "layer": "access"
+      "layer": "access",
+      "default_vrf_id": "corp",
+      "default_vlan_id": 100
     },
     {
       "id": "nagoya-office",
-      "layer": "access"
+      "layer": "access",
+      "default_vrf_id": "corp",
+      "default_vlan_id": 100
     },
     {
       "id": "osaka-wan-a",
-      "layer": "edge"
+      "layer": "edge",
+      "default_vrf_id": "corp",
+      "default_vlan_id": 100
     },
     {
       "id": "osaka-wan-b",
-      "layer": "edge"
+      "layer": "edge",
+      "default_vrf_id": "corp",
+      "default_vlan_id": 100
     },
     {
       "id": "tokyo-wan-a",
-      "layer": "edge"
+      "layer": "edge",
+      "default_vrf_id": "corp",
+      "default_vlan_id": 100
     },
     {
       "id": "tokyo-wan-b",
-      "layer": "edge"
+      "layer": "edge",
+      "default_vrf_id": "corp",
+      "default_vlan_id": 100
     },
     {
       "id": "nagoya-wan-a",
-      "layer": "edge"
+      "layer": "edge",
+      "default_vrf_id": "corp",
+      "default_vlan_id": 100
     },
     {
       "id": "nagoya-wan-b",
-      "layer": "edge"
+      "layer": "edge",
+      "default_vrf_id": "corp",
+      "default_vlan_id": 100
     },
     {
       "id": "primary-dc-core-a",
-      "layer": "core"
+      "layer": "core",
+      "default_vrf_id": "corp",
+      "default_vlan_id": 100
     },
     {
       "id": "primary-dc-core-b",
-      "layer": "core"
+      "layer": "core",
+      "default_vrf_id": "corp",
+      "default_vlan_id": 100
     },
     {
       "id": "dr-dc-core-a",
-      "layer": "core"
+      "layer": "core",
+      "default_vrf_id": "corp",
+      "default_vlan_id": 100
     },
     {
       "id": "dr-dc-core-b",
-      "layer": "core"
+      "layer": "core",
+      "default_vrf_id": "corp",
+      "default_vlan_id": 100
     },
     {
       "id": "dc-interconnect",
-      "layer": "core"
+      "layer": "core",
+      "default_vrf_id": "corp",
+      "default_vlan_id": 100
     },
     {
       "id": "file-service",
-      "layer": "service"
+      "layer": "service",
+      "default_vrf_id": "corp",
+      "default_vlan_id": 100
     },
     {
       "id": "monitoring",
-      "layer": "service"
+      "layer": "service",
+      "default_vrf_id": "corp",
+      "default_vlan_id": 100
     }
   ],
   "interfaces": [
     {
       "id": "osaka-office-osaka-office-wan-a-if",
       "node_id": "osaka-office",
-      "ip_address": "10.1.0.1/30"
+      "ip_address": "10.1.0.1/30",
+      "vrf_id": "corp",
+      "vlan_id": 100
     },
     {
       "id": "osaka-wan-a-osaka-office-wan-a-if",
       "node_id": "osaka-wan-a",
-      "ip_address": "10.1.0.2/30"
+      "ip_address": "10.1.0.2/30",
+      "vrf_id": "corp",
+      "vlan_id": 100
     },
     {
       "id": "osaka-office-osaka-office-wan-b-if",
       "node_id": "osaka-office",
-      "ip_address": "10.2.0.1/30"
+      "ip_address": "10.2.0.1/30",
+      "vrf_id": "corp",
+      "vlan_id": 100
     },
     {
       "id": "osaka-wan-b-osaka-office-wan-b-if",
       "node_id": "osaka-wan-b",
-      "ip_address": "10.2.0.2/30"
+      "ip_address": "10.2.0.2/30",
+      "vrf_id": "corp",
+      "vlan_id": 100
     },
     {
       "id": "tokyo-office-tokyo-office-wan-a-if",
       "node_id": "tokyo-office",
-      "ip_address": "10.3.0.1/30"
+      "ip_address": "10.3.0.1/30",
+      "vrf_id": "corp",
+      "vlan_id": 100
     },
     {
       "id": "tokyo-wan-a-tokyo-office-wan-a-if",
       "node_id": "tokyo-wan-a",
-      "ip_address": "10.3.0.2/30"
+      "ip_address": "10.3.0.2/30",
+      "vrf_id": "corp",
+      "vlan_id": 100
     },
     {
       "id": "tokyo-office-tokyo-office-wan-b-if",
       "node_id": "tokyo-office",
-      "ip_address": "10.4.0.1/30"
+      "ip_address": "10.4.0.1/30",
+      "vrf_id": "corp",
+      "vlan_id": 100
     },
     {
       "id": "tokyo-wan-b-tokyo-office-wan-b-if",
       "node_id": "tokyo-wan-b",
-      "ip_address": "10.4.0.2/30"
+      "ip_address": "10.4.0.2/30",
+      "vrf_id": "corp",
+      "vlan_id": 100
     },
     {
       "id": "nagoya-office-nagoya-office-wan-a-if",
       "node_id": "nagoya-office",
-      "ip_address": "10.5.0.1/30"
+      "ip_address": "10.5.0.1/30",
+      "vrf_id": "corp",
+      "vlan_id": 100
     },
     {
       "id": "nagoya-wan-a-nagoya-office-wan-a-if",
       "node_id": "nagoya-wan-a",
-      "ip_address": "10.5.0.2/30"
+      "ip_address": "10.5.0.2/30",
+      "vrf_id": "corp",
+      "vlan_id": 100
     },
     {
       "id": "nagoya-office-nagoya-office-wan-b-if",
       "node_id": "nagoya-office",
-      "ip_address": "10.6.0.1/30"
+      "ip_address": "10.6.0.1/30",
+      "vrf_id": "corp",
+      "vlan_id": 100
     },
     {
       "id": "nagoya-wan-b-nagoya-office-wan-b-if",
       "node_id": "nagoya-wan-b",
-      "ip_address": "10.6.0.2/30"
+      "ip_address": "10.6.0.2/30",
+      "vrf_id": "corp",
+      "vlan_id": 100
     },
     {
       "id": "osaka-wan-a-osaka-wan-a-primary-a-if",
       "node_id": "osaka-wan-a",
-      "ip_address": "10.7.0.1/30"
+      "ip_address": "10.7.0.1/30",
+      "vrf_id": "corp",
+      "vlan_id": 100
     },
     {
       "id": "primary-dc-core-a-osaka-wan-a-primary-a-if",
       "node_id": "primary-dc-core-a",
-      "ip_address": "10.7.0.2/30"
+      "ip_address": "10.7.0.2/30",
+      "vrf_id": "corp",
+      "vlan_id": 100
     },
     {
       "id": "osaka-wan-b-osaka-wan-b-primary-b-if",
       "node_id": "osaka-wan-b",
-      "ip_address": "10.8.0.1/30"
+      "ip_address": "10.8.0.1/30",
+      "vrf_id": "corp",
+      "vlan_id": 100
     },
     {
       "id": "primary-dc-core-b-osaka-wan-b-primary-b-if",
       "node_id": "primary-dc-core-b",
-      "ip_address": "10.8.0.2/30"
+      "ip_address": "10.8.0.2/30",
+      "vrf_id": "corp",
+      "vlan_id": 100
     },
     {
       "id": "osaka-wan-a-osaka-wan-a-dr-a-if",
       "node_id": "osaka-wan-a",
-      "ip_address": "10.9.0.1/30"
+      "ip_address": "10.9.0.1/30",
+      "vrf_id": "corp",
+      "vlan_id": 100
     },
     {
       "id": "dr-dc-core-a-osaka-wan-a-dr-a-if",
       "node_id": "dr-dc-core-a",
-      "ip_address": "10.9.0.2/30"
+      "ip_address": "10.9.0.2/30",
+      "vrf_id": "corp",
+      "vlan_id": 100
     },
     {
       "id": "osaka-wan-b-osaka-wan-b-dr-b-if",
       "node_id": "osaka-wan-b",
-      "ip_address": "10.10.0.1/30"
+      "ip_address": "10.10.0.1/30",
+      "vrf_id": "corp",
+      "vlan_id": 100
     },
     {
       "id": "dr-dc-core-b-osaka-wan-b-dr-b-if",
       "node_id": "dr-dc-core-b",
-      "ip_address": "10.10.0.2/30"
+      "ip_address": "10.10.0.2/30",
+      "vrf_id": "corp",
+      "vlan_id": 100
     },
     {
       "id": "tokyo-wan-a-tokyo-wan-a-primary-a-if",
       "node_id": "tokyo-wan-a",
-      "ip_address": "10.11.0.1/30"
+      "ip_address": "10.11.0.1/30",
+      "vrf_id": "corp",
+      "vlan_id": 100
     },
     {
       "id": "primary-dc-core-a-tokyo-wan-a-primary-a-if",
       "node_id": "primary-dc-core-a",
-      "ip_address": "10.11.0.2/30"
+      "ip_address": "10.11.0.2/30",
+      "vrf_id": "corp",
+      "vlan_id": 100
     },
     {
       "id": "tokyo-wan-b-tokyo-wan-b-primary-b-if",
       "node_id": "tokyo-wan-b",
-      "ip_address": "10.12.0.1/30"
+      "ip_address": "10.12.0.1/30",
+      "vrf_id": "corp",
+      "vlan_id": 100
     },
     {
       "id": "primary-dc-core-b-tokyo-wan-b-primary-b-if",
       "node_id": "primary-dc-core-b",
-      "ip_address": "10.12.0.2/30"
+      "ip_address": "10.12.0.2/30",
+      "vrf_id": "corp",
+      "vlan_id": 100
     },
     {
       "id": "nagoya-wan-a-nagoya-wan-a-primary-a-if",
       "node_id": "nagoya-wan-a",
-      "ip_address": "10.13.0.1/30"
+      "ip_address": "10.13.0.1/30",
+      "vrf_id": "corp",
+      "vlan_id": 100
     },
     {
       "id": "primary-dc-core-a-nagoya-wan-a-primary-a-if",
       "node_id": "primary-dc-core-a",
-      "ip_address": "10.13.0.2/30"
+      "ip_address": "10.13.0.2/30",
+      "vrf_id": "corp",
+      "vlan_id": 100
     },
     {
       "id": "nagoya-wan-b-nagoya-wan-b-primary-b-if",
       "node_id": "nagoya-wan-b",
-      "ip_address": "10.14.0.1/30"
+      "ip_address": "10.14.0.1/30",
+      "vrf_id": "corp",
+      "vlan_id": 100
     },
     {
       "id": "primary-dc-core-b-nagoya-wan-b-primary-b-if",
       "node_id": "primary-dc-core-b",
-      "ip_address": "10.14.0.2/30"
+      "ip_address": "10.14.0.2/30",
+      "vrf_id": "corp",
+      "vlan_id": 100
     },
     {
       "id": "primary-dc-core-a-primary-a-primary-b-if",
       "node_id": "primary-dc-core-a",
-      "ip_address": "10.15.0.1/30"
+      "ip_address": "10.15.0.1/30",
+      "vrf_id": "corp",
+      "vlan_id": 100
     },
     {
       "id": "primary-dc-core-b-primary-a-primary-b-if",
       "node_id": "primary-dc-core-b",
-      "ip_address": "10.15.0.2/30"
+      "ip_address": "10.15.0.2/30",
+      "vrf_id": "corp",
+      "vlan_id": 100
     },
     {
       "id": "dr-dc-core-a-dr-a-dr-b-if",
       "node_id": "dr-dc-core-a",
-      "ip_address": "10.16.0.1/30"
+      "ip_address": "10.16.0.1/30",
+      "vrf_id": "corp",
+      "vlan_id": 100
     },
     {
       "id": "dr-dc-core-b-dr-a-dr-b-if",
       "node_id": "dr-dc-core-b",
-      "ip_address": "10.16.0.2/30"
+      "ip_address": "10.16.0.2/30",
+      "vrf_id": "corp",
+      "vlan_id": 100
     },
     {
       "id": "primary-dc-core-a-primary-a-dci-if",
       "node_id": "primary-dc-core-a",
-      "ip_address": "10.17.0.1/30"
+      "ip_address": "10.17.0.1/30",
+      "vrf_id": "corp",
+      "vlan_id": 100
     },
     {
       "id": "dc-interconnect-primary-a-dci-if",
       "node_id": "dc-interconnect",
-      "ip_address": "10.17.0.2/30"
+      "ip_address": "10.17.0.2/30",
+      "vrf_id": "corp",
+      "vlan_id": 100
     },
     {
       "id": "primary-dc-core-b-primary-b-dci-if",
       "node_id": "primary-dc-core-b",
-      "ip_address": "10.18.0.1/30"
+      "ip_address": "10.18.0.1/30",
+      "vrf_id": "corp",
+      "vlan_id": 100
     },
     {
       "id": "dc-interconnect-primary-b-dci-if",
       "node_id": "dc-interconnect",
-      "ip_address": "10.18.0.2/30"
+      "ip_address": "10.18.0.2/30",
+      "vrf_id": "corp",
+      "vlan_id": 100
     },
     {
       "id": "dr-dc-core-a-dr-a-dci-if",
       "node_id": "dr-dc-core-a",
-      "ip_address": "10.19.0.1/30"
+      "ip_address": "10.19.0.1/30",
+      "vrf_id": "corp",
+      "vlan_id": 100
     },
     {
       "id": "dc-interconnect-dr-a-dci-if",
       "node_id": "dc-interconnect",
-      "ip_address": "10.19.0.2/30"
+      "ip_address": "10.19.0.2/30",
+      "vrf_id": "corp",
+      "vlan_id": 100
     },
     {
       "id": "dr-dc-core-b-dr-b-dci-if",
       "node_id": "dr-dc-core-b",
-      "ip_address": "10.20.0.1/30"
+      "ip_address": "10.20.0.1/30",
+      "vrf_id": "corp",
+      "vlan_id": 100
     },
     {
       "id": "dc-interconnect-dr-b-dci-if",
       "node_id": "dc-interconnect",
-      "ip_address": "10.20.0.2/30"
+      "ip_address": "10.20.0.2/30",
+      "vrf_id": "corp",
+      "vlan_id": 100
     },
     {
       "id": "primary-dc-core-a-primary-a-erp-vip-if",
       "node_id": "primary-dc-core-a",
-      "ip_address": "10.21.0.1/30"
+      "ip_address": "10.21.0.1/30",
+      "vrf_id": "corp",
+      "vlan_id": 100
     },
     {
       "id": "primary-dc-core-b-primary-b-erp-vip-if",
       "node_id": "primary-dc-core-b",
-      "ip_address": "10.22.0.1/30"
+      "ip_address": "10.22.0.1/30",
+      "vrf_id": "corp",
+      "vlan_id": 100
     },
     {
       "id": "dr-dc-core-a-dr-a-erp-vip-if",
       "node_id": "dr-dc-core-a",
-      "ip_address": "10.23.0.1/30"
+      "ip_address": "10.23.0.1/30",
+      "vrf_id": "corp",
+      "vlan_id": 100
     },
     {
       "id": "primary-dc-core-b-primary-b-erp-reporting-vip-if",
       "node_id": "primary-dc-core-b",
-      "ip_address": "10.24.0.1/30"
+      "ip_address": "10.24.0.1/30",
+      "vrf_id": "corp",
+      "vlan_id": 100
     },
     {
       "id": "primary-dc-core-a-primary-a-file-service-if",
       "node_id": "primary-dc-core-a",
-      "ip_address": "10.25.0.1/30"
+      "ip_address": "10.25.0.1/30",
+      "vrf_id": "corp",
+      "vlan_id": 100
     },
     {
       "id": "file-service-primary-a-file-service-if",
       "node_id": "file-service",
-      "ip_address": "10.25.0.2/30"
+      "ip_address": "10.25.0.2/30",
+      "vrf_id": "corp",
+      "vlan_id": 100
     },
     {
       "id": "dr-dc-core-b-dr-b-file-service-if",
       "node_id": "dr-dc-core-b",
-      "ip_address": "10.26.0.1/30"
+      "ip_address": "10.26.0.1/30",
+      "vrf_id": "corp",
+      "vlan_id": 100
     },
     {
       "id": "file-service-dr-b-file-service-if",
       "node_id": "file-service",
-      "ip_address": "10.26.0.2/30"
+      "ip_address": "10.26.0.2/30",
+      "vrf_id": "corp",
+      "vlan_id": 100
     },
     {
       "id": "monitoring-monitoring-primary-a-if",
       "node_id": "monitoring",
-      "ip_address": "10.27.0.1/30"
+      "ip_address": "10.27.0.1/30",
+      "vrf_id": "corp",
+      "vlan_id": 100
     },
     {
       "id": "primary-dc-core-a-monitoring-primary-a-if",
       "node_id": "primary-dc-core-a",
-      "ip_address": "10.27.0.2/30"
+      "ip_address": "10.27.0.2/30",
+      "vrf_id": "corp",
+      "vlan_id": 100
     },
     {
       "id": "monitoring-monitoring-dr-a-if",
       "node_id": "monitoring",
-      "ip_address": "10.28.0.1/30"
+      "ip_address": "10.28.0.1/30",
+      "vrf_id": "corp",
+      "vlan_id": 100
     },
     {
       "id": "dr-dc-core-a-monitoring-dr-a-if",
       "node_id": "dr-dc-core-a",
-      "ip_address": "10.28.0.2/30"
+      "ip_address": "10.28.0.2/30",
+      "vrf_id": "corp",
+      "vlan_id": 100
     },
     {
       "id": "primary-dc-core-b-erp-reporting-vip-if",
       "node_id": "primary-dc-core-b",
-      "ip_address": "10.10.10.30/32"
+      "ip_address": "10.10.10.30/32",
+      "vrf_id": "corp",
+      "vlan_id": 100
     },
     {
       "id": "primary-dc-core-a-erp-vip-if",
       "node_id": "primary-dc-core-a",
-      "ip_address": "10.10.10.10/32"
+      "ip_address": "10.10.10.10/32",
+      "vrf_id": "corp",
+      "vlan_id": 100
     }
   ],
   "virtual_ips": [
@@ -368,7 +508,8 @@
       "to_interface": "osaka-wan-a-osaka-office-wan-a-if",
       "cost": 100,
       "active": true,
-      "bandwidth_mbps": 1000
+      "bandwidth_mbps": 1000,
+      "vlan_id": 100
     },
     {
       "id": "osaka-office-wan-b",
@@ -376,7 +517,8 @@
       "to_interface": "osaka-wan-b-osaka-office-wan-b-if",
       "cost": 100,
       "active": true,
-      "bandwidth_mbps": 1000
+      "bandwidth_mbps": 1000,
+      "vlan_id": 100
     },
     {
       "id": "tokyo-office-wan-a",
@@ -384,7 +526,8 @@
       "to_interface": "tokyo-wan-a-tokyo-office-wan-a-if",
       "cost": 100,
       "active": true,
-      "bandwidth_mbps": 1000
+      "bandwidth_mbps": 1000,
+      "vlan_id": 100
     },
     {
       "id": "tokyo-office-wan-b",
@@ -392,7 +535,8 @@
       "to_interface": "tokyo-wan-b-tokyo-office-wan-b-if",
       "cost": 100,
       "active": true,
-      "bandwidth_mbps": 1000
+      "bandwidth_mbps": 1000,
+      "vlan_id": 100
     },
     {
       "id": "nagoya-office-wan-a",
@@ -400,7 +544,8 @@
       "to_interface": "nagoya-wan-a-nagoya-office-wan-a-if",
       "cost": 100,
       "active": true,
-      "bandwidth_mbps": 1000
+      "bandwidth_mbps": 1000,
+      "vlan_id": 100
     },
     {
       "id": "nagoya-office-wan-b",
@@ -408,7 +553,8 @@
       "to_interface": "nagoya-wan-b-nagoya-office-wan-b-if",
       "cost": 100,
       "active": true,
-      "bandwidth_mbps": 1000
+      "bandwidth_mbps": 1000,
+      "vlan_id": 100
     },
     {
       "id": "osaka-wan-a-primary-a",
@@ -416,7 +562,8 @@
       "to_interface": "primary-dc-core-a-osaka-wan-a-primary-a-if",
       "cost": 3,
       "active": true,
-      "bandwidth_mbps": 40000
+      "bandwidth_mbps": 40000,
+      "vlan_id": 100
     },
     {
       "id": "osaka-wan-b-primary-b",
@@ -424,7 +571,8 @@
       "to_interface": "primary-dc-core-b-osaka-wan-b-primary-b-if",
       "cost": 3,
       "active": true,
-      "bandwidth_mbps": 40000
+      "bandwidth_mbps": 40000,
+      "vlan_id": 100
     },
     {
       "id": "osaka-wan-a-dr-a",
@@ -432,7 +580,8 @@
       "to_interface": "dr-dc-core-a-osaka-wan-a-dr-a-if",
       "cost": 3,
       "active": true,
-      "bandwidth_mbps": 40000
+      "bandwidth_mbps": 40000,
+      "vlan_id": 100
     },
     {
       "id": "osaka-wan-b-dr-b",
@@ -440,7 +589,8 @@
       "to_interface": "dr-dc-core-b-osaka-wan-b-dr-b-if",
       "cost": 3,
       "active": true,
-      "bandwidth_mbps": 40000
+      "bandwidth_mbps": 40000,
+      "vlan_id": 100
     },
     {
       "id": "tokyo-wan-a-primary-a",
@@ -448,7 +598,8 @@
       "to_interface": "primary-dc-core-a-tokyo-wan-a-primary-a-if",
       "cost": 3,
       "active": true,
-      "bandwidth_mbps": 40000
+      "bandwidth_mbps": 40000,
+      "vlan_id": 100
     },
     {
       "id": "tokyo-wan-b-primary-b",
@@ -456,7 +607,8 @@
       "to_interface": "primary-dc-core-b-tokyo-wan-b-primary-b-if",
       "cost": 3,
       "active": true,
-      "bandwidth_mbps": 40000
+      "bandwidth_mbps": 40000,
+      "vlan_id": 100
     },
     {
       "id": "nagoya-wan-a-primary-a",
@@ -464,7 +616,8 @@
       "to_interface": "primary-dc-core-a-nagoya-wan-a-primary-a-if",
       "cost": 3,
       "active": true,
-      "bandwidth_mbps": 40000
+      "bandwidth_mbps": 40000,
+      "vlan_id": 100
     },
     {
       "id": "nagoya-wan-b-primary-b",
@@ -472,7 +625,8 @@
       "to_interface": "primary-dc-core-b-nagoya-wan-b-primary-b-if",
       "cost": 3,
       "active": true,
-      "bandwidth_mbps": 40000
+      "bandwidth_mbps": 40000,
+      "vlan_id": 100
     },
     {
       "id": "primary-a-primary-b",
@@ -480,7 +634,8 @@
       "to_interface": "primary-dc-core-b-primary-a-primary-b-if",
       "cost": 1,
       "active": true,
-      "bandwidth_mbps": 100000
+      "bandwidth_mbps": 100000,
+      "vlan_id": 100
     },
     {
       "id": "dr-a-dr-b",
@@ -488,7 +643,8 @@
       "to_interface": "dr-dc-core-b-dr-a-dr-b-if",
       "cost": 1,
       "active": true,
-      "bandwidth_mbps": 100000
+      "bandwidth_mbps": 100000,
+      "vlan_id": 100
     },
     {
       "id": "primary-a-dci",
@@ -496,7 +652,8 @@
       "to_interface": "dc-interconnect-primary-a-dci-if",
       "cost": 3,
       "active": true,
-      "bandwidth_mbps": 40000
+      "bandwidth_mbps": 40000,
+      "vlan_id": 100
     },
     {
       "id": "primary-b-dci",
@@ -504,7 +661,8 @@
       "to_interface": "dc-interconnect-primary-b-dci-if",
       "cost": 3,
       "active": true,
-      "bandwidth_mbps": 40000
+      "bandwidth_mbps": 40000,
+      "vlan_id": 100
     },
     {
       "id": "dr-a-dci",
@@ -512,7 +670,8 @@
       "to_interface": "dc-interconnect-dr-a-dci-if",
       "cost": 3,
       "active": true,
-      "bandwidth_mbps": 40000
+      "bandwidth_mbps": 40000,
+      "vlan_id": 100
     },
     {
       "id": "dr-b-dci",
@@ -520,7 +679,8 @@
       "to_interface": "dc-interconnect-dr-b-dci-if",
       "cost": 3,
       "active": true,
-      "bandwidth_mbps": 40000
+      "bandwidth_mbps": 40000,
+      "vlan_id": 100
     },
     {
       "id": "primary-a-file-service",
@@ -528,7 +688,8 @@
       "to_interface": "file-service-primary-a-file-service-if",
       "cost": 3,
       "active": true,
-      "bandwidth_mbps": 40000
+      "bandwidth_mbps": 40000,
+      "vlan_id": 100
     },
     {
       "id": "dr-b-file-service",
@@ -536,7 +697,8 @@
       "to_interface": "file-service-dr-b-file-service-if",
       "cost": 3,
       "active": true,
-      "bandwidth_mbps": 40000
+      "bandwidth_mbps": 40000,
+      "vlan_id": 100
     },
     {
       "id": "monitoring-primary-a",
@@ -544,7 +706,8 @@
       "to_interface": "primary-dc-core-a-monitoring-primary-a-if",
       "cost": 3,
       "active": true,
-      "bandwidth_mbps": 40000
+      "bandwidth_mbps": 40000,
+      "vlan_id": 100
     },
     {
       "id": "monitoring-dr-a",
@@ -552,7 +715,8 @@
       "to_interface": "dr-dc-core-a-monitoring-dr-a-if",
       "cost": 3,
       "active": true,
-      "bandwidth_mbps": 40000
+      "bandwidth_mbps": 40000,
+      "vlan_id": 100
     }
   ],
   "routing": [

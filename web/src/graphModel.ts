@@ -1,4 +1,5 @@
 import { parse as parseYaml } from "yaml";
+import { graphFromRfc7951, isRfc7951Graph } from "./adapters/rfc7951";
 import type {
   GraphModel,
   InputGraphModel,
@@ -492,12 +493,18 @@ export function exportableTestSuite(tests: TrafficTestRecordModel[]): TrafficTes
   };
 }
 
-export function routeRequestOrGraphToGraph(parsed: InputGraphModel | InputRouteRequest): GraphModel {
+export function routeRequestOrGraphToGraph(parsed: unknown): GraphModel {
+  if (!isRecord(parsed)) {
+    throw new Error("nodes/interfaces/links を持つGraphModelまたはRouteRequestを指定してください");
+  }
   const nextGraph = "graph" in parsed ? parsed.graph : parsed;
+  if (isRfc7951Graph(nextGraph)) {
+    return normalizeGraphModel(graphFromRfc7951(nextGraph));
+  }
   if (!isRecord(nextGraph) || !Array.isArray(nextGraph.nodes) || !Array.isArray(nextGraph.interfaces) || !Array.isArray(nextGraph.links)) {
     throw new Error("nodes/interfaces/links を持つGraphModelまたはRouteRequestを指定してください");
   }
-  return normalizeGraphModel(nextGraph);
+  return normalizeGraphModel(nextGraph as InputGraphModel);
 }
 
 export function buildRouteRequestFromTest(graph: GraphModel, test: TrafficTestRecordModel): RouteRequest {
@@ -609,6 +616,8 @@ function interfaceEntriesFromInput(interfaces: InterfaceModel[] | YangInterfaceN
         ip_address: address
           ? `${address.ip}${typeof address.prefix_length === "number" ? `/${address.prefix_length}` : ""}`
           : undefined,
+        vrf_id: interfaceItem.vrf_id,
+        vlan_id: interfaceItem.vlan_id,
       };
     })
   );
@@ -636,6 +645,8 @@ function interfacesToYangNodes(interfaces: InterfaceModel[]): YangInterfaceNodeM
               ],
             }
           : undefined,
+        vrf_id: interfaceItem.vrf_id,
+        vlan_id: interfaceItem.vlan_id,
       })),
     },
   }));
@@ -855,7 +866,7 @@ export function cleanNatRule(rule: NatRuleModel): NatRuleModel {
     ...rule,
     interface_id: rule.interface_id?.trim() || undefined,
     original: rule.original.trim() || "any",
-    translated: rule.translated.trim() || "203.0.113.10",
+    translated: rule.translated.trim(),
     protocol,
     port: protocol === "tcp" || protocol === "udp" ? normalizeTransportPort(rule.port) : undefined,
   };
