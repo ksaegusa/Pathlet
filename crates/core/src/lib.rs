@@ -6,6 +6,7 @@ use std::net::Ipv4Addr;
 mod ip;
 mod nat;
 mod policy;
+pub mod rfc7951;
 
 use ip::{interface_ip, ipv4_prefix_match};
 use nat::{NatState, apply_nat_stage, apply_reverse_nat_state};
@@ -18,6 +19,10 @@ pub struct Node {
     pub id: String,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub device_type: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub default_vrf_id: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub default_vlan_id: Option<u16>,
 }
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
@@ -26,6 +31,10 @@ pub struct Interface {
     pub node_id: String,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub ip_address: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub vrf_id: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub vlan_id: Option<u16>,
 }
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
@@ -33,6 +42,8 @@ pub struct Link {
     pub id: String,
     pub from_interface: String,
     pub to_interface: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub vlan_id: Option<u16>,
     pub cost: u32,
     pub active: bool,
 }
@@ -149,6 +160,8 @@ struct YangInterfacesState {
 #[derive(Clone, Debug, Deserialize)]
 struct YangInterface {
     name: String,
+    vrf_id: Option<String>,
+    vlan_id: Option<u16>,
     ipv4: Option<YangInterfaceIpv4>,
 }
 
@@ -455,6 +468,8 @@ where
                             Some(prefix_length) => format!("{}/{}", address.ip, prefix_length),
                             None => address.ip,
                         }),
+                        vrf_id: interface.vrf_id,
+                        vlan_id: interface.vlan_id,
                     }
                 })
                 .collect(),
@@ -1171,6 +1186,7 @@ pub fn routing_table_path(
 
     let target_node_id = to.node_id.as_str();
     let target_ip = to.ip_address.as_deref().and_then(interface_ip);
+    let route_context = route_context_for_interface(graph, from);
     let mut current_node_id = from.node_id.as_str();
     let mut path = vec![from_interface.to_string()];
     let mut matched_route_ids = Vec::new();
@@ -1199,16 +1215,22 @@ pub fn routing_table_path(
             });
         }
 
-        let selected = if let Some(link) =
-            connected_link_to_target(graph, current_node_id, target_node_id, target_ip)
-        {
+        let selected = if let Some(link) = connected_link_to_target(
+            graph,
+            current_node_id,
+            target_node_id,
+            target_ip,
+            &route_context,
+        ) {
             Some((None, link))
         } else {
             let Some(route) = best_route_for_node(
+                graph,
                 current_node_id,
                 target_node_id,
                 to_interface,
                 target_ip,
+                &route_context,
                 &routes,
             ) else {
                 return Ok(Route {
@@ -1226,7 +1248,7 @@ pub fn routing_table_path(
                     loop_link_ids,
                 });
             };
-            let Some(link) = resolve_route_link(graph, route) else {
+            let Some(link) = resolve_route_link(graph, route, &route_context) else {
                 matched_route_ids.push(route.id.clone());
                 return Ok(Route {
                     path: path.clone(),
@@ -1318,15 +1340,18 @@ pub fn routing_table_path(
 }
 
 fn best_route_for_node<'a>(
+    graph: &Graph,
     node_id: &str,
     target_node_id: &str,
     target_interface_id: &str,
     target_ip: Option<Ipv4Addr>,
+    context: &RouteContext,
     routes: &'a [RouteEntry],
 ) -> Option<&'a RouteEntry> {
     routes
         .iter()
         .filter(|route| route.active && route.node_id == node_id)
+        .filter(|route| route_matches_context(graph, route, context))
         .filter_map(|route| {
             route_match_score(route, target_node_id, target_interface_id, target_ip).map(|score| {
                 let administrative_distance = route.administrative_distance.unwrap_or(1);
@@ -1368,7 +1393,54 @@ fn route_match_score(
     (route.destination == "0.0.0.0/0").then_some(0)
 }
 
-fn resolve_route_link<'a>(graph: &'a Graph, route: &RouteEntry) -> Option<&'a Link> {
+#[derive(Clone, Debug, Eq, PartialEq)]
+struct RouteContext {
+    vrf_id: String,
+    vlan_id: Option<u16>,
+}
+
+fn route_context_for_interface(graph: &Graph, interface: &Interface) -> RouteContext {
+    let node = graph.nodes.iter().find(|node| node.id == interface.node_id);
+    RouteContext {
+        vrf_id: interface
+            .vrf_id
+            .clone()
+            .or_else(|| node.and_then(|node| node.default_vrf_id.clone()))
+            .unwrap_or_else(|| "default".to_string()),
+        vlan_id: interface
+            .vlan_id
+            .or_else(|| node.and_then(|node| node.default_vlan_id)),
+    }
+}
+
+fn effective_route_vrf<'a>(graph: &'a Graph, route: &'a RouteEntry) -> &'a str {
+    route.vrf_id.as_deref().unwrap_or_else(|| {
+        graph
+            .nodes
+            .iter()
+            .find(|node| node.id == route.node_id)
+            .and_then(|node| node.default_vrf_id.as_deref())
+            .unwrap_or("default")
+    })
+}
+
+fn route_matches_context(graph: &Graph, route: &RouteEntry, context: &RouteContext) -> bool {
+    effective_route_vrf(graph, route) == context.vrf_id
+        && route
+            .vlan_id
+            .is_none_or(|route_vlan_id| Some(route_vlan_id) == context.vlan_id)
+}
+
+fn link_matches_context(link: &Link, context: &RouteContext) -> bool {
+    link.vlan_id
+        .is_none_or(|link_vlan_id| Some(link_vlan_id) == context.vlan_id)
+}
+
+fn resolve_route_link<'a>(
+    graph: &'a Graph,
+    route: &RouteEntry,
+    context: &RouteContext,
+) -> Option<&'a Link> {
     if let Some(next_hop) = &route.next_hop {
         if let Some(next_hop_interface) = graph.interfaces.iter().find(|interface| {
             interface.id == *next_hop
@@ -1380,6 +1452,7 @@ fn resolve_route_link<'a>(graph: &'a Graph, route: &RouteEntry) -> Option<&'a Li
         }) {
             return active_links_from_node(graph, &route.node_id)
                 .into_iter()
+                .filter(|link| link_matches_context(link, context))
                 .filter(|link| {
                     route
                         .egress_interface
@@ -1395,6 +1468,7 @@ fn resolve_route_link<'a>(graph: &'a Graph, route: &RouteEntry) -> Option<&'a Li
                 &route.node_id,
                 next_hop,
                 route.egress_interface.as_deref(),
+                context,
             );
         }
     }
@@ -1405,6 +1479,7 @@ fn resolve_route_link<'a>(graph: &'a Graph, route: &RouteEntry) -> Option<&'a Li
         .and_then(|egress_interface| {
             active_links_from_node(graph, &route.node_id)
                 .into_iter()
+                .filter(|link| link_matches_context(link, context))
                 .find(|link| link_uses_interface(link, egress_interface))
         })
 }
@@ -1414,9 +1489,11 @@ fn connected_link_to_target<'a>(
     from_node_id: &str,
     to_node_id: &str,
     target_ip: Option<Ipv4Addr>,
+    context: &RouteContext,
 ) -> Option<&'a Link> {
     let direct_links = active_links_from_node(graph, from_node_id)
         .into_iter()
+        .filter(|link| link_matches_context(link, context))
         .filter(|link| {
             let Some((_, ingress_interface)) = oriented_link_interfaces(link, from_node_id, graph)
             else {
@@ -1455,9 +1532,11 @@ fn active_link_between_nodes<'a>(
     from_node_id: &str,
     to_node_id: &str,
     egress_interface: Option<&str>,
+    context: &RouteContext,
 ) -> Option<&'a Link> {
     active_links_from_node(graph, from_node_id)
         .into_iter()
+        .filter(|link| link_matches_context(link, context))
         .filter(|link| egress_interface.is_none_or(|egress| link_uses_interface(link, egress)))
         .find(|link| {
             let Some((_, ingress_interface)) = oriented_link_interfaces(link, from_node_id, graph)
@@ -1629,14 +1708,20 @@ mod tests {
                 Node {
                     id: "r1".into(),
                     device_type: None,
+                    default_vrf_id: None,
+                    default_vlan_id: None,
                 },
                 Node {
                     id: "r2".into(),
                     device_type: None,
+                    default_vrf_id: None,
+                    default_vlan_id: None,
                 },
                 Node {
                     id: "r3".into(),
                     device_type: None,
+                    default_vrf_id: None,
+                    default_vlan_id: None,
                 },
             ],
             interfaces: vec![
@@ -1644,21 +1729,29 @@ mod tests {
                     id: "r1-eth0".into(),
                     node_id: "r1".into(),
                     ip_address: Some("10.0.0.1/24".into()),
+                    vrf_id: None,
+                    vlan_id: None,
                 },
                 Interface {
                     id: "r2-eth0".into(),
                     node_id: "r2".into(),
                     ip_address: Some("10.0.0.2/24".into()),
+                    vrf_id: None,
+                    vlan_id: None,
                 },
                 Interface {
                     id: "r2-eth1".into(),
                     node_id: "r2".into(),
                     ip_address: Some("10.0.1.2/24".into()),
+                    vrf_id: None,
+                    vlan_id: None,
                 },
                 Interface {
                     id: "r3-eth0".into(),
                     node_id: "r3".into(),
                     ip_address: Some("10.0.2.3/24".into()),
+                    vrf_id: None,
+                    vlan_id: None,
                 },
             ],
             links: vec![
@@ -1666,6 +1759,7 @@ mod tests {
                     id: "l1".into(),
                     from_interface: "r1-eth0".into(),
                     to_interface: "r2-eth0".into(),
+                    vlan_id: None,
                     cost: 10,
                     active: true,
                 },
@@ -1673,6 +1767,7 @@ mod tests {
                     id: "l2".into(),
                     from_interface: "r2-eth0".into(),
                     to_interface: "r3-eth0".into(),
+                    vlan_id: None,
                     cost: 5,
                     active: true,
                 },
@@ -1680,6 +1775,7 @@ mod tests {
                     id: "l3".into(),
                     from_interface: "r1-eth0".into(),
                     to_interface: "r3-eth0".into(),
+                    vlan_id: None,
                     cost: 100,
                     active: true,
                 },
@@ -1687,6 +1783,7 @@ mod tests {
                     id: "down".into(),
                     from_interface: "r2-eth1".into(),
                     to_interface: "r3-eth0".into(),
+                    vlan_id: None,
                     cost: 1,
                     active: false,
                 },
@@ -1737,6 +1834,7 @@ mod tests {
             id: "equal-cost".into(),
             from_interface: "r1-eth0".into(),
             to_interface: "r3-eth0".into(),
+            vlan_id: None,
             cost: 15,
             active: true,
         });
@@ -1760,6 +1858,7 @@ mod tests {
                 id: "l1".into(),
                 from_interface: "r1-eth0".into(),
                 to_interface: "r2-eth0".into(),
+                vlan_id: None,
                 cost: 10,
                 active: false,
             }],
@@ -1789,6 +1888,7 @@ mod tests {
             id: "bad".into(),
             from_interface: "missing".into(),
             to_interface: "r1-eth0".into(),
+            vlan_id: None,
             cost: 1,
             active: true,
         });
@@ -1869,6 +1969,12 @@ mod tests {
     fn routing_table_mode_uses_yang_routing() {
         let mut graph = sample_graph();
         graph.links.retain(|link| link.id != "l3");
+        graph
+            .interfaces
+            .iter_mut()
+            .find(|interface| interface.id == "r1-eth0")
+            .unwrap()
+            .vlan_id = Some(100);
         graph.routing.push(YangRouting {
             node_id: "r1".into(),
             routing: YangRoutingState {
@@ -1900,6 +2006,99 @@ mod tests {
         assert_eq!(route.status, RouteStatus::Reachable);
         assert_eq!(route.path, vec!["r1-eth0", "r2-eth0", "r3-eth0"]);
         assert_eq!(route.matched_route_ids, vec!["r1-to-r3"]);
+    }
+
+    #[test]
+    fn routing_table_mode_filters_routes_by_effective_vrf() {
+        let mut graph = sample_graph();
+        graph.links.retain(|link| link.id != "l3");
+        graph
+            .nodes
+            .iter_mut()
+            .find(|node| node.id == "r1")
+            .unwrap()
+            .default_vrf_id = Some("blue".into());
+        graph.routes.push(RouteEntry {
+            id: "red-route".into(),
+            node_id: "r1".into(),
+            destination: "r3".into(),
+            next_hop: Some("r2".into()),
+            egress_interface: Some("r1-eth0".into()),
+            metric: 10,
+            administrative_distance: Some(1),
+            vrf_id: Some("red".into()),
+            vlan_id: None,
+            active: true,
+        });
+
+        let route = routing_table_path(&graph, "r1-eth0", "r3-eth0").unwrap();
+
+        assert_eq!(route.status, RouteStatus::NoRoute);
+        assert!(route.matched_route_ids.is_empty());
+    }
+
+    #[test]
+    fn routing_table_mode_uses_node_default_vrf_for_unscoped_routes() {
+        let mut graph = sample_graph();
+        graph.links.retain(|link| link.id != "l3");
+        graph
+            .nodes
+            .iter_mut()
+            .find(|node| node.id == "r1")
+            .unwrap()
+            .default_vrf_id = Some("blue".into());
+        graph.routes.push(RouteEntry {
+            id: "node-default-vrf-route".into(),
+            node_id: "r1".into(),
+            destination: "r3".into(),
+            next_hop: Some("r2".into()),
+            egress_interface: Some("r1-eth0".into()),
+            metric: 10,
+            administrative_distance: Some(1),
+            vrf_id: None,
+            vlan_id: None,
+            active: true,
+        });
+
+        let route = routing_table_path(&graph, "r1-eth0", "r3-eth0").unwrap();
+
+        assert_eq!(route.status, RouteStatus::Reachable);
+        assert_eq!(route.matched_route_ids, vec!["node-default-vrf-route"]);
+    }
+
+    #[test]
+    fn routing_table_mode_filters_routes_and_links_by_vlan() {
+        let mut graph = sample_graph();
+        graph.links.retain(|link| link.id != "l3");
+        graph
+            .interfaces
+            .iter_mut()
+            .find(|interface| interface.id == "r1-eth0")
+            .unwrap()
+            .vlan_id = Some(100);
+        graph
+            .links
+            .iter_mut()
+            .find(|link| link.id == "l1")
+            .unwrap()
+            .vlan_id = Some(200);
+        graph.routes.push(RouteEntry {
+            id: "vlan-100-route".into(),
+            node_id: "r1".into(),
+            destination: "r3".into(),
+            next_hop: Some("r2".into()),
+            egress_interface: Some("r1-eth0".into()),
+            metric: 10,
+            administrative_distance: Some(1),
+            vrf_id: Some("default".into()),
+            vlan_id: Some(100),
+            active: true,
+        });
+
+        let route = routing_table_path(&graph, "r1-eth0", "r3-eth0").unwrap();
+
+        assert_eq!(route.status, RouteStatus::Blackhole);
+        assert_eq!(route.matched_route_ids, vec!["vlan-100-route"]);
     }
 
     #[test]

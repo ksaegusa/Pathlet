@@ -15,7 +15,7 @@ import type {
   TrafficTestRecordModel,
 } from "./types";
 
-const exampleNodes: NodeModel[] = [
+const exampleNodes: NodeModel[] = ([
   { id: "osaka-office", device_type: "client", layer: "access" },
   { id: "tokyo-office", device_type: "client", layer: "access" },
   { id: "osaka-wan", device_type: "network_device", layer: "edge" },
@@ -25,7 +25,7 @@ const exampleNodes: NodeModel[] = [
   { id: "internet-gw", device_type: "network_device", layer: "core" },
   { id: "auth", device_type: "client", layer: "service" },
   { id: "public-api", device_type: "client", layer: "service" },
-];
+] satisfies NodeModel[]).map((node) => ({ ...node, default_vrf_id: "default", default_vlan_id: 100 }));
 
 type ExampleLinkSpec = {
   id: string;
@@ -71,6 +71,7 @@ function exampleLink({ id, fromNode, toNode, bandwidthMbps }: ExampleLinkSpec): 
     from_interface: linkEndpointInterfaceId(id, fromNode),
     to_interface: linkEndpointInterfaceId(id, toNode),
     bandwidth_mbps: bandwidthMbps,
+    vlan_id: 100,
     cost: linkCostFromBandwidth(bandwidthMbps),
     active: true,
   };
@@ -96,17 +97,23 @@ const exampleInterfaces = [
       id: linkEndpointInterfaceId(link.id, link.fromNode),
       node_id: link.fromNode,
       ip_address: `10.0.${index}.1/30`,
+      vrf_id: "default",
+      vlan_id: 100,
     },
     {
       id: linkEndpointInterfaceId(link.id, link.toNode),
       node_id: link.toNode,
       ip_address: `10.0.${index}.2/30`,
+      vrf_id: "default",
+      vlan_id: 100,
     },
   ]),
   {
     id: "primary-center-erp-vip-if",
     node_id: "primary-center",
     ip_address: "10.10.0.10/32",
+    vrf_id: "default",
+    vlan_id: 100,
   },
 ];
 

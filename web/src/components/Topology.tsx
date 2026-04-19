@@ -31,6 +31,7 @@ export function Topology({
   onInterfaceSelect,
   onLinkSelect,
   onNodeMove,
+  onNodeMoveEnd,
 }: {
   graph: GraphModel;
   layout: TopologyLayoutModel;
@@ -48,6 +49,7 @@ export function Topology({
   onInterfaceSelect: (interfaceId: string) => void;
   onLinkSelect: (linkId: string) => void;
   onNodeMove: (nodeId: string, x: number, y: number) => void;
+  onNodeMoveEnd?: (nodeId: string) => void;
 }) {
   const [draggingNodeId, setDraggingNodeId] = useState<string | null>(null);
   const dragRef = useRef<{ nodeId: string; startX: number; startY: number; moved: boolean } | null>(null);
@@ -61,34 +63,34 @@ export function Topology({
   const interfaceRadius = layout.density === "crowded" ? 4 : 6;
   const nodeChipWidth = layout.density === "crowded" ? 54 : 58;
   const renderedHeight = Math.min(860, Math.max(layout.engine === "elk" ? 380 : 520, layout.height * 0.78));
-  const groupBounds = layout.groups
-    ? [...layout.groups.entries()].map(([id, group]) => ({ id, ...group }))
-    : groups.flatMap((group) => {
-        const points = graph.nodes
-          .filter((node) => nodeGroupId(node) === group.id)
-          .map((node) => layout.nodes.get(node.id))
-          .filter((point): point is { x: number; y: number } => Boolean(point));
-        if (!points.length) {
-          return [];
-        }
+  const groupBounds = groups.flatMap((group) => {
+    const points = graph.nodes
+      .filter((node) => nodeGroupId(node) === group.id)
+      .map((node) => layout.nodes.get(node.id))
+      .filter((point): point is { x: number; y: number } => Boolean(point));
+    if (!points.length) {
+      return [];
+    }
 
-        const minX = Math.min(...points.map((point) => point.x));
-        const maxX = Math.max(...points.map((point) => point.x));
-        const minY = Math.min(...points.map((point) => point.y));
-        const maxY = Math.max(...points.map((point) => point.y));
-        const paddingX = layout.density === "crowded" ? 36 : 58;
-        const paddingY = layout.density === "crowded" ? 34 : 52;
-        return [
-          {
-            id: group.id,
-            label: group.label,
-            x: Math.max(12, minX - paddingX),
-            y: Math.max(12, minY - paddingY),
-            width: Math.min(layout.width - 24, maxX - minX + paddingX * 2),
-            height: Math.min(layout.height - 24, maxY - minY + paddingY * 2),
-          },
-        ];
-      });
+    const minX = Math.min(...points.map((point) => point.x));
+    const maxX = Math.max(...points.map((point) => point.x));
+    const minY = Math.min(...points.map((point) => point.y));
+    const maxY = Math.max(...points.map((point) => point.y));
+    const paddingX = layout.density === "crowded" ? 36 : 58;
+    const paddingY = layout.density === "crowded" ? 46 : 64;
+    const x = Math.max(12, minX - paddingX);
+    const y = Math.max(28, minY - paddingY);
+    return [
+      {
+        id: group.id,
+        label: group.label,
+        x,
+        y,
+        width: Math.max(72, Math.min(layout.width - x - 12, maxX - minX + paddingX * 2)),
+        height: Math.max(64, Math.min(layout.height - y - 12, maxY - minY + paddingY * 2)),
+      },
+    ];
+  });
 
   function pointFromEvent(event: ReactPointerEvent<SVGSVGElement>) {
     const svg = event.currentTarget;
@@ -101,6 +103,7 @@ export function Topology({
 
   function startNodeDrag(event: ReactPointerEvent, nodeId: string) {
     event.stopPropagation();
+    event.currentTarget.setPointerCapture?.(event.pointerId);
     dragRef.current = { nodeId, startX: event.clientX, startY: event.clientY, moved: false };
     setDraggingNodeId(nodeId);
   }
@@ -117,6 +120,7 @@ export function Topology({
     const drag = dragRef.current;
     if (drag?.moved) {
       suppressClickNodeIdRef.current = drag.nodeId;
+      onNodeMoveEnd?.(drag.nodeId);
       window.setTimeout(() => {
         if (suppressClickNodeIdRef.current === drag.nodeId) {
           suppressClickNodeIdRef.current = null;
@@ -161,9 +165,9 @@ export function Topology({
             rx="8"
           />
           <text
-            className="fill-zinc-500 text-xs font-semibold uppercase"
-            x={group.x + group.width / 2}
-            y={group.y + 24}
+            className="topology-group-label"
+            x={group.x + 10}
+            y={group.y - 8}
           >
             {group.label}
           </text>

@@ -369,6 +369,7 @@ Web UI の `JSON/YAMLを読み込む` から `GraphModel` 形式または `Route
 - [examples/topologies/dual-dc-vrrp.json](examples/topologies/dual-dc-vrrp.json)
 - [examples/topologies/campus-fw-internet.json](examples/topologies/campus-fw-internet.json)
 - [examples/topologies/multi-region-vrrp.json](examples/topologies/multi-region-vrrp.json)
+- [examples/topologies/rfc7951-minimal.json](examples/topologies/rfc7951-minimal.json) は RFC 7951 風の namespace 付き JSON と `pathlet:*` 拡張の最小例です。
 
 主要フィールド:
 
@@ -418,7 +419,7 @@ type GraphModel = {
 
 `virtual_ips` は現在メタデータ表示用です。VIP は active / standby のネットワーク機器に紐づけて表現します。冗長 VIP の active 切替を経路計算へ反映する処理はまだありません。
 
-`routing` はノードごとのルーティング情報です。RFC 8349 `ietf-routing` と `ietf-ipv4-unicast-routing` を互換ターゲットにした `routing` / `control-plane-protocols` / `static-routes` のサブセットとして保持します。ルール編集画面から参照・編集できます。将来の VRF / VLAN 対応を見越して、各エントリは任意の `vrf_id` と `vlan_id` を持てます。これら Pathlet 固有フィールドは、外部 YANG JSON adapter では `pathlet:*` 拡張として扱う方針です。
+`routing` はノードごとのルーティング情報です。RFC 8349 `ietf-routing` と `ietf-ipv4-unicast-routing` を互換ターゲットにした `routing` / `control-plane-protocols` / `static-routes` のサブセットとして保持します。ルール編集画面から参照・編集できます。各エントリは任意の `vrf_id` と `vlan_id` を持てます。VRF / VLAN は routing lookup と link 通過条件に使います。これら Pathlet 固有フィールドは、外部 YANG JSON adapter では `pathlet:*` 拡張として扱う方針です。
 
 `acls` は RFC 8519 `ietf-access-control-list` の `acl` / `aces` / `matches` / `actions` を互換ターゲットにした Policy 定義です。`acl_attachments` で各ノードの ingress / egress に適用する ACL を指定します。`acl_attachments[].interface_id` がある場合は対象 interface にだけ適用し、省略時は node-wide ACL として扱います。`acl_attachments` は Pathlet の graph-level attachment であり、標準 ACL module そのものではありません。経路計算後の path に対して TCP / UDP / ICMP、送信元/宛先 IPv4/CIDR、destination port `eq` を評価し、deny に一致した場合は `policy_denied` として返します。
 
@@ -535,7 +536,7 @@ Rust core は 2 つの計算モードを持ちます。
 - `shortest_path`: interface graph を作り、Dijkstra で最短経路を求めます。
 - `routing_table`: ノードごとの `routing` を読み、hop-by-hop に lookup して `reachable` / `no_route` / `loop` / `blackhole` を返します。
 
-`routing_table` は現在、宛先 node/interface の完全一致、宛先 IPv4/CIDR、default route (`0.0.0.0/0`) を扱います。VRF / VLAN はモデルとして保持しますが、lookup の分離条件としてはまだ使っていません。
+`routing_table` は現在、宛先 node/interface の完全一致、宛先 IPv4/CIDR、default route (`0.0.0.0/0`) を扱います。VRF は送信元 interface の `vrf_id`、なければ node の `default_vrf_id`、さらにない場合は `default` として lookup 条件に使います。VLAN は送信元 interface の `vlan_id`、なければ node の `default_vlan_id` を lookup / link 通過条件に使います。link に `vlan_id` がある場合は有効 VLAN と一致する場合だけ通過できます。
 
 直結している宛先 node へは、明示的な static route がなくても到達可能として扱います。宛先 IP が分かる場合は、現在 node の egress interface prefix に一致する直結 link を優先します。prefix に一致する link が見つからない場合は、既存トポロジ互換のため、宛先 node への active な直結 link を fallback として使います。
 

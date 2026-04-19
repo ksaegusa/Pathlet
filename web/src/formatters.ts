@@ -51,6 +51,9 @@ export function modalTitle(activeModal: ActiveModal) {
   if (activeModal === "node") {
     return "ノード詳細";
   }
+  if (activeModal === "test") {
+    return "通信試験詳細";
+  }
   return "トポロジ編集";
 }
 

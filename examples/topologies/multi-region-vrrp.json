@@ -2,321 +2,453 @@
   "nodes": [
     {
       "id": "app-client",
-      "layer": "access"
+      "layer": "access",
+      "default_vrf_id": "app",
+      "default_vlan_id": 110
     },
     {
       "id": "admin-client",
-      "layer": "access"
+      "layer": "access",
+      "default_vrf_id": "admin",
+      "default_vlan_id": 120
     },
     {
       "id": "east-edge-a",
-      "layer": "edge"
+      "layer": "edge",
+      "default_vrf_id": "app",
+      "default_vlan_id": 110
     },
     {
       "id": "east-edge-b",
-      "layer": "edge"
+      "layer": "edge",
+      "default_vrf_id": "app",
+      "default_vlan_id": 110
     },
     {
       "id": "west-edge-a",
-      "layer": "edge"
+      "layer": "edge",
+      "default_vrf_id": "admin",
+      "default_vlan_id": 120
     },
     {
       "id": "west-edge-b",
-      "layer": "edge"
+      "layer": "edge",
+      "default_vrf_id": "admin",
+      "default_vlan_id": 120
     },
     {
       "id": "east-core-a",
-      "layer": "core"
+      "layer": "core",
+      "default_vrf_id": "app",
+      "default_vlan_id": 110
     },
     {
       "id": "east-core-b",
-      "layer": "core"
+      "layer": "core",
+      "default_vrf_id": "app",
+      "default_vlan_id": 110
     },
     {
       "id": "west-core-a",
-      "layer": "core"
+      "layer": "core",
+      "default_vrf_id": "app",
+      "default_vlan_id": 110
     },
     {
       "id": "west-core-b",
-      "layer": "core"
+      "layer": "core",
+      "default_vrf_id": "app",
+      "default_vlan_id": 110
     },
     {
       "id": "region-backbone-a",
-      "layer": "core"
+      "layer": "core",
+      "default_vrf_id": "app",
+      "default_vlan_id": 110
     },
     {
       "id": "region-backbone-b",
-      "layer": "core"
+      "layer": "core",
+      "default_vrf_id": "app",
+      "default_vlan_id": 110
     },
     {
       "id": "object-store",
-      "layer": "service"
+      "layer": "service",
+      "default_vrf_id": "app",
+      "default_vlan_id": 110
     },
     {
       "id": "observability",
-      "layer": "service"
+      "layer": "service",
+      "default_vrf_id": "app",
+      "default_vlan_id": 110
     }
   ],
   "interfaces": [
     {
       "id": "app-client-app-east-edge-a-if",
       "node_id": "app-client",
-      "ip_address": "10.1.0.1/30"
+      "ip_address": "10.1.0.1/30",
+      "vrf_id": "app",
+      "vlan_id": 110
     },
     {
       "id": "east-edge-a-app-east-edge-a-if",
       "node_id": "east-edge-a",
-      "ip_address": "10.1.0.2/30"
+      "ip_address": "10.1.0.2/30",
+      "vrf_id": "app",
+      "vlan_id": 110
     },
     {
       "id": "app-client-app-east-edge-b-if",
       "node_id": "app-client",
-      "ip_address": "10.2.0.1/30"
+      "ip_address": "10.2.0.1/30",
+      "vrf_id": "app",
+      "vlan_id": 110
     },
     {
       "id": "east-edge-b-app-east-edge-b-if",
       "node_id": "east-edge-b",
-      "ip_address": "10.2.0.2/30"
+      "ip_address": "10.2.0.2/30",
+      "vrf_id": "app",
+      "vlan_id": 110
     },
     {
       "id": "admin-client-admin-west-edge-a-if",
       "node_id": "admin-client",
-      "ip_address": "10.3.0.1/30"
+      "ip_address": "10.3.0.1/30",
+      "vrf_id": "admin",
+      "vlan_id": 120
     },
     {
       "id": "west-edge-a-admin-west-edge-a-if",
       "node_id": "west-edge-a",
-      "ip_address": "10.3.0.2/30"
+      "ip_address": "10.3.0.2/30",
+      "vrf_id": "admin",
+      "vlan_id": 120
     },
     {
       "id": "admin-client-admin-west-edge-b-if",
       "node_id": "admin-client",
-      "ip_address": "10.4.0.1/30"
+      "ip_address": "10.4.0.1/30",
+      "vrf_id": "admin",
+      "vlan_id": 120
     },
     {
       "id": "west-edge-b-admin-west-edge-b-if",
       "node_id": "west-edge-b",
-      "ip_address": "10.4.0.2/30"
+      "ip_address": "10.4.0.2/30",
+      "vrf_id": "admin",
+      "vlan_id": 120
     },
     {
       "id": "east-edge-a-east-edge-a-core-a-if",
       "node_id": "east-edge-a",
-      "ip_address": "10.5.0.1/30"
+      "ip_address": "10.5.0.1/30",
+      "vrf_id": "app",
+      "vlan_id": 110
     },
     {
       "id": "east-core-a-east-edge-a-core-a-if",
       "node_id": "east-core-a",
-      "ip_address": "10.5.0.2/30"
+      "ip_address": "10.5.0.2/30",
+      "vrf_id": "app",
+      "vlan_id": 110
     },
     {
       "id": "east-edge-a-east-edge-a-core-b-if",
       "node_id": "east-edge-a",
-      "ip_address": "10.6.0.1/30"
+      "ip_address": "10.6.0.1/30",
+      "vrf_id": "app",
+      "vlan_id": 110
     },
     {
       "id": "east-core-b-east-edge-a-core-b-if",
       "node_id": "east-core-b",
-      "ip_address": "10.6.0.2/30"
+      "ip_address": "10.6.0.2/30",
+      "vrf_id": "app",
+      "vlan_id": 110
     },
     {
       "id": "east-edge-b-east-edge-b-core-a-if",
       "node_id": "east-edge-b",
-      "ip_address": "10.7.0.1/30"
+      "ip_address": "10.7.0.1/30",
+      "vrf_id": "app",
+      "vlan_id": 110
     },
     {
       "id": "east-core-a-east-edge-b-core-a-if",
       "node_id": "east-core-a",
-      "ip_address": "10.7.0.2/30"
+      "ip_address": "10.7.0.2/30",
+      "vrf_id": "app",
+      "vlan_id": 110
     },
     {
       "id": "east-edge-b-east-edge-b-core-b-if",
       "node_id": "east-edge-b",
-      "ip_address": "10.8.0.1/30"
+      "ip_address": "10.8.0.1/30",
+      "vrf_id": "app",
+      "vlan_id": 110
     },
     {
       "id": "east-core-b-east-edge-b-core-b-if",
       "node_id": "east-core-b",
-      "ip_address": "10.8.0.2/30"
+      "ip_address": "10.8.0.2/30",
+      "vrf_id": "app",
+      "vlan_id": 110
     },
     {
       "id": "west-edge-a-west-edge-a-core-a-if",
       "node_id": "west-edge-a",
-      "ip_address": "10.9.0.1/30"
+      "ip_address": "10.9.0.1/30",
+      "vrf_id": "admin",
+      "vlan_id": 120
     },
     {
       "id": "west-core-a-west-edge-a-core-a-if",
       "node_id": "west-core-a",
-      "ip_address": "10.9.0.2/30"
+      "ip_address": "10.9.0.2/30",
+      "vrf_id": "admin",
+      "vlan_id": 120
     },
     {
       "id": "west-edge-a-west-edge-a-core-b-if",
       "node_id": "west-edge-a",
-      "ip_address": "10.10.0.1/30"
+      "ip_address": "10.10.0.1/30",
+      "vrf_id": "admin",
+      "vlan_id": 120
     },
     {
       "id": "west-core-b-west-edge-a-core-b-if",
       "node_id": "west-core-b",
-      "ip_address": "10.10.0.2/30"
+      "ip_address": "10.10.0.2/30",
+      "vrf_id": "admin",
+      "vlan_id": 120
     },
     {
       "id": "west-edge-b-west-edge-b-core-a-if",
       "node_id": "west-edge-b",
-      "ip_address": "10.11.0.1/30"
+      "ip_address": "10.11.0.1/30",
+      "vrf_id": "admin",
+      "vlan_id": 120
     },
     {
       "id": "west-core-a-west-edge-b-core-a-if",
       "node_id": "west-core-a",
-      "ip_address": "10.11.0.2/30"
+      "ip_address": "10.11.0.2/30",
+      "vrf_id": "admin",
+      "vlan_id": 120
     },
     {
       "id": "west-edge-b-west-edge-b-core-b-if",
       "node_id": "west-edge-b",
-      "ip_address": "10.12.0.1/30"
+      "ip_address": "10.12.0.1/30",
+      "vrf_id": "admin",
+      "vlan_id": 120
     },
     {
       "id": "west-core-b-west-edge-b-core-b-if",
       "node_id": "west-core-b",
-      "ip_address": "10.12.0.2/30"
+      "ip_address": "10.12.0.2/30",
+      "vrf_id": "admin",
+      "vlan_id": 120
     },
     {
       "id": "east-core-a-east-core-a-b-if",
       "node_id": "east-core-a",
-      "ip_address": "10.13.0.1/30"
+      "ip_address": "10.13.0.1/30",
+      "vrf_id": "app",
+      "vlan_id": 110
     },
     {
       "id": "east-core-b-east-core-a-b-if",
       "node_id": "east-core-b",
-      "ip_address": "10.13.0.2/30"
+      "ip_address": "10.13.0.2/30",
+      "vrf_id": "app",
+      "vlan_id": 110
     },
     {
       "id": "west-core-a-west-core-a-b-if",
       "node_id": "west-core-a",
-      "ip_address": "10.14.0.1/30"
+      "ip_address": "10.14.0.1/30",
+      "vrf_id": "app",
+      "vlan_id": 110
     },
     {
       "id": "west-core-b-west-core-a-b-if",
       "node_id": "west-core-b",
-      "ip_address": "10.14.0.2/30"
+      "ip_address": "10.14.0.2/30",
+      "vrf_id": "app",
+      "vlan_id": 110
     },
     {
       "id": "east-core-a-east-a-backbone-a-if",
       "node_id": "east-core-a",
-      "ip_address": "10.15.0.1/30"
+      "ip_address": "10.15.0.1/30",
+      "vrf_id": "app",
+      "vlan_id": 110
     },
     {
       "id": "region-backbone-a-east-a-backbone-a-if",
       "node_id": "region-backbone-a",
-      "ip_address": "10.15.0.2/30"
+      "ip_address": "10.15.0.2/30",
+      "vrf_id": "app",
+      "vlan_id": 110
     },
     {
       "id": "east-core-b-east-b-backbone-b-if",
       "node_id": "east-core-b",
-      "ip_address": "10.16.0.1/30"
+      "ip_address": "10.16.0.1/30",
+      "vrf_id": "app",
+      "vlan_id": 110
     },
     {
       "id": "region-backbone-b-east-b-backbone-b-if",
       "node_id": "region-backbone-b",
-      "ip_address": "10.16.0.2/30"
+      "ip_address": "10.16.0.2/30",
+      "vrf_id": "app",
+      "vlan_id": 110
     },
     {
       "id": "west-core-a-west-a-backbone-a-if",
       "node_id": "west-core-a",
-      "ip_address": "10.17.0.1/30"
+      "ip_address": "10.17.0.1/30",
+      "vrf_id": "app",
+      "vlan_id": 110
     },
     {
       "id": "region-backbone-a-west-a-backbone-a-if",
       "node_id": "region-backbone-a",
-      "ip_address": "10.17.0.2/30"
+      "ip_address": "10.17.0.2/30",
+      "vrf_id": "app",
+      "vlan_id": 110
     },
     {
       "id": "west-core-b-west-b-backbone-b-if",
       "node_id": "west-core-b",
-      "ip_address": "10.18.0.1/30"
+      "ip_address": "10.18.0.1/30",
+      "vrf_id": "app",
+      "vlan_id": 110
     },
     {
       "id": "region-backbone-b-west-b-backbone-b-if",
       "node_id": "region-backbone-b",
-      "ip_address": "10.18.0.2/30"
+      "ip_address": "10.18.0.2/30",
+      "vrf_id": "app",
+      "vlan_id": 110
     },
     {
       "id": "region-backbone-a-backbone-a-b-if",
       "node_id": "region-backbone-a",
-      "ip_address": "10.19.0.1/30"
+      "ip_address": "10.19.0.1/30",
+      "vrf_id": "app",
+      "vlan_id": 110
     },
     {
       "id": "region-backbone-b-backbone-a-b-if",
       "node_id": "region-backbone-b",
-      "ip_address": "10.19.0.2/30"
+      "ip_address": "10.19.0.2/30",
+      "vrf_id": "app",
+      "vlan_id": 110
     },
     {
       "id": "east-core-a-east-a-api-vip-if",
       "node_id": "east-core-a",
-      "ip_address": "10.20.0.1/30"
+      "ip_address": "10.20.0.1/30",
+      "vrf_id": "app",
+      "vlan_id": 110
     },
     {
       "id": "east-core-b-east-b-api-vip-if",
       "node_id": "east-core-b",
-      "ip_address": "10.21.0.1/30"
+      "ip_address": "10.21.0.1/30",
+      "vrf_id": "app",
+      "vlan_id": 110
     },
     {
       "id": "west-core-a-west-a-api-vip-if",
       "node_id": "west-core-a",
-      "ip_address": "10.22.0.1/30"
+      "ip_address": "10.22.0.1/30",
+      "vrf_id": "app",
+      "vlan_id": 110
     },
     {
       "id": "west-core-a-west-a-db-vip-if",
       "node_id": "west-core-a",
-      "ip_address": "10.23.0.1/30"
+      "ip_address": "10.23.0.1/30",
+      "vrf_id": "app",
+      "vlan_id": 110
     },
     {
       "id": "west-core-b-west-b-db-vip-if",
       "node_id": "west-core-b",
-      "ip_address": "10.24.0.1/30"
+      "ip_address": "10.24.0.1/30",
+      "vrf_id": "app",
+      "vlan_id": 110
     },
     {
       "id": "east-core-b-east-b-db-vip-if",
       "node_id": "east-core-b",
-      "ip_address": "10.25.0.1/30"
+      "ip_address": "10.25.0.1/30",
+      "vrf_id": "app",
+      "vlan_id": 110
     },
     {
       "id": "west-core-b-west-b-object-store-if",
       "node_id": "west-core-b",
-      "ip_address": "10.26.0.1/30"
+      "ip_address": "10.26.0.1/30",
+      "vrf_id": "app",
+      "vlan_id": 110
     },
     {
       "id": "object-store-west-b-object-store-if",
       "node_id": "object-store",
-      "ip_address": "10.26.0.2/30"
+      "ip_address": "10.26.0.2/30",
+      "vrf_id": "app",
+      "vlan_id": 110
     },
     {
       "id": "east-core-a-east-a-observability-if",
       "node_id": "east-core-a",
-      "ip_address": "10.27.0.1/30"
+      "ip_address": "10.27.0.1/30",
+      "vrf_id": "app",
+      "vlan_id": 110
     },
     {
       "id": "observability-east-a-observability-if",
       "node_id": "observability",
-      "ip_address": "10.27.0.2/30"
+      "ip_address": "10.27.0.2/30",
+      "vrf_id": "app",
+      "vlan_id": 110
     },
     {
       "id": "west-core-a-west-a-observability-if",
       "node_id": "west-core-a",
-      "ip_address": "10.28.0.1/30"
+      "ip_address": "10.28.0.1/30",
+      "vrf_id": "app",
+      "vlan_id": 110
     },
     {
       "id": "observability-west-a-observability-if",
       "node_id": "observability",
-      "ip_address": "10.28.0.2/30"
+      "ip_address": "10.28.0.2/30",
+      "vrf_id": "app",
+      "vlan_id": 110
     },
     {
       "id": "east-core-a-api-vip-if",
       "node_id": "east-core-a",
-      "ip_address": "10.40.0.10/32"
+      "ip_address": "10.40.0.10/32",
+      "vrf_id": "app",
+      "vlan_id": 110
     },
     {
       "id": "west-core-a-db-vip-if",
       "node_id": "west-core-a",
-      "ip_address": "10.50.0.10/32"
+      "ip_address": "10.50.0.10/32",
+      "vrf_id": "app",
+      "vlan_id": 110
     }
   ],
   "virtual_ips": [
@@ -350,7 +482,8 @@
       "to_interface": "east-edge-a-app-east-edge-a-if",
       "cost": 100,
       "active": true,
-      "bandwidth_mbps": 1000
+      "bandwidth_mbps": 1000,
+      "vlan_id": 110
     },
     {
       "id": "app-east-edge-b",
@@ -358,7 +491,8 @@
       "to_interface": "east-edge-b-app-east-edge-b-if",
       "cost": 100,
       "active": true,
-      "bandwidth_mbps": 1000
+      "bandwidth_mbps": 1000,
+      "vlan_id": 110
     },
     {
       "id": "admin-west-edge-a",
@@ -366,7 +500,8 @@
       "to_interface": "west-edge-a-admin-west-edge-a-if",
       "cost": 100,
       "active": true,
-      "bandwidth_mbps": 1000
+      "bandwidth_mbps": 1000,
+      "vlan_id": 120
     },
     {
       "id": "admin-west-edge-b",
@@ -374,7 +509,8 @@
       "to_interface": "west-edge-b-admin-west-edge-b-if",
       "cost": 100,
       "active": true,
-      "bandwidth_mbps": 1000
+      "bandwidth_mbps": 1000,
+      "vlan_id": 120
     },
     {
       "id": "east-edge-a-core-a",
@@ -382,7 +518,8 @@
       "to_interface": "east-core-a-east-edge-a-core-a-if",
       "cost": 3,
       "active": true,
-      "bandwidth_mbps": 40000
+      "bandwidth_mbps": 40000,
+      "vlan_id": 110
     },
     {
       "id": "east-edge-a-core-b",
@@ -390,7 +527,8 @@
       "to_interface": "east-core-b-east-edge-a-core-b-if",
       "cost": 3,
       "active": true,
-      "bandwidth_mbps": 40000
+      "bandwidth_mbps": 40000,
+      "vlan_id": 110
     },
     {
       "id": "east-edge-b-core-a",
@@ -398,7 +536,8 @@
       "to_interface": "east-core-a-east-edge-b-core-a-if",
       "cost": 3,
       "active": true,
-      "bandwidth_mbps": 40000
+      "bandwidth_mbps": 40000,
+      "vlan_id": 110
     },
     {
       "id": "east-edge-b-core-b",
@@ -406,7 +545,8 @@
       "to_interface": "east-core-b-east-edge-b-core-b-if",
       "cost": 3,
       "active": true,
-      "bandwidth_mbps": 40000
+      "bandwidth_mbps": 40000,
+      "vlan_id": 110
     },
     {
       "id": "west-edge-a-core-a",
@@ -414,7 +554,8 @@
       "to_interface": "west-core-a-west-edge-a-core-a-if",
       "cost": 3,
       "active": true,
-      "bandwidth_mbps": 40000
+      "bandwidth_mbps": 40000,
+      "vlan_id": 120
     },
     {
       "id": "west-edge-a-core-b",
@@ -422,7 +563,8 @@
       "to_interface": "west-core-b-west-edge-a-core-b-if",
       "cost": 3,
       "active": true,
-      "bandwidth_mbps": 40000
+      "bandwidth_mbps": 40000,
+      "vlan_id": 120
     },
     {
       "id": "west-edge-b-core-a",
@@ -430,7 +572,8 @@
       "to_interface": "west-core-a-west-edge-b-core-a-if",
       "cost": 3,
       "active": true,
-      "bandwidth_mbps": 40000
+      "bandwidth_mbps": 40000,
+      "vlan_id": 120
     },
     {
       "id": "west-edge-b-core-b",
@@ -438,7 +581,8 @@
       "to_interface": "west-core-b-west-edge-b-core-b-if",
       "cost": 3,
       "active": true,
-      "bandwidth_mbps": 40000
+      "bandwidth_mbps": 40000,
+      "vlan_id": 120
     },
     {
       "id": "east-core-a-b",
@@ -446,7 +590,8 @@
       "to_interface": "east-core-b-east-core-a-b-if",
       "cost": 1,
       "active": true,
-      "bandwidth_mbps": 100000
+      "bandwidth_mbps": 100000,
+      "vlan_id": 110
     },
     {
       "id": "west-core-a-b",
@@ -454,7 +599,8 @@
       "to_interface": "west-core-b-west-core-a-b-if",
       "cost": 1,
       "active": true,
-      "bandwidth_mbps": 100000
+      "bandwidth_mbps": 100000,
+      "vlan_id": 110
     },
     {
       "id": "east-a-backbone-a",
@@ -462,7 +608,8 @@
       "to_interface": "region-backbone-a-east-a-backbone-a-if",
       "cost": 3,
       "active": true,
-      "bandwidth_mbps": 40000
+      "bandwidth_mbps": 40000,
+      "vlan_id": 110
     },
     {
       "id": "east-b-backbone-b",
@@ -470,7 +617,8 @@
       "to_interface": "region-backbone-b-east-b-backbone-b-if",
       "cost": 3,
       "active": true,
-      "bandwidth_mbps": 40000
+      "bandwidth_mbps": 40000,
+      "vlan_id": 110
     },
     {
       "id": "west-a-backbone-a",
@@ -478,7 +626,8 @@
       "to_interface": "region-backbone-a-west-a-backbone-a-if",
       "cost": 3,
       "active": true,
-      "bandwidth_mbps": 40000
+      "bandwidth_mbps": 40000,
+      "vlan_id": 110
     },
     {
       "id": "west-b-backbone-b",
@@ -486,7 +635,8 @@
       "to_interface": "region-backbone-b-west-b-backbone-b-if",
       "cost": 3,
       "active": true,
-      "bandwidth_mbps": 40000
+      "bandwidth_mbps": 40000,
+      "vlan_id": 110
     },
     {
       "id": "backbone-a-b",
@@ -494,7 +644,8 @@
       "to_interface": "region-backbone-b-backbone-a-b-if",
       "cost": 1,
       "active": true,
-      "bandwidth_mbps": 100000
+      "bandwidth_mbps": 100000,
+      "vlan_id": 110
     },
     {
       "id": "west-b-object-store",
@@ -502,7 +653,8 @@
       "to_interface": "object-store-west-b-object-store-if",
       "cost": 3,
       "active": true,
-      "bandwidth_mbps": 40000
+      "bandwidth_mbps": 40000,
+      "vlan_id": 110
     },
     {
       "id": "east-a-observability",
@@ -510,7 +662,8 @@
       "to_interface": "observability-east-a-observability-if",
       "cost": 3,
       "active": true,
-      "bandwidth_mbps": 40000
+      "bandwidth_mbps": 40000,
+      "vlan_id": 110
     },
     {
       "id": "west-a-observability",
@@ -518,7 +671,8 @@
       "to_interface": "observability-west-a-observability-if",
       "cost": 3,
       "active": true,
-      "bandwidth_mbps": 40000
+      "bandwidth_mbps": 40000,
+      "vlan_id": 110
     }
   ],
   "routing": [

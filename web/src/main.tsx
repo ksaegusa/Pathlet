@@ -3,7 +3,7 @@ import { createRoot } from "react-dom/client";
 import { Cable, FileDown, FileJson, GitBranch, ListChecks, Network, Shield, Zap } from "lucide-react";
 import { stringify as stringifyYaml } from "yaml";
 import { Badge, Card, CardHeader, EndpointSummary, Metric, Modal, buttonClass, cn } from "./components/common";
-import { GraphEditor, LinksPanel, NatPanel, NodeDetailsPanel, PolicyPanel, RoutingPanel, SelectedLinkPanel, TrafficIntentEditor, TrafficTestsPanel } from "./components/editors";
+import { GraphEditor, LinksPanel, NatPanel, NodeDetailsPanel, PolicyPanel, RoutingPanel, SelectedLinkPanel, TrafficIntentEditor, TrafficTestDetailPanel, TrafficTestsPanel } from "./components/editors";
 import { RouteDetails } from "./components/RouteDetails";
 import { Topology } from "./components/Topology";
 import { exampleGraph, exampleTrafficTests } from "./exampleGraph";
@@ -102,7 +102,7 @@ function App() {
   const [interfaceDisplayMode, setInterfaceDisplayMode] = useState<InterfaceDisplayMode>("compact");
   const [trafficTests, setTrafficTests] = useState<TrafficTestRecordModel[]>(exampleTrafficTests);
   const [trafficTestResults, setTrafficTestResults] = useState<Record<string, TrafficTestResultModel>>({});
-  const [selectedTrafficTestId, setSelectedTrafficTestId] = useState<string | null>(null);
+  const [selectedTrafficTestId, setSelectedTrafficTestId] = useState<string | null>(exampleTrafficTests[0]?.id ?? null);
   const [openRuleSections, setOpenRuleSections] = useState({
     routing: true,
     policy: false,
@@ -168,13 +168,31 @@ function App() {
   const activeLinkCount = effectiveGraph.links.filter((link) => link.active).length;
   const downLinkCount = effectiveGraph.links.length - activeLinkCount;
   const selectedCost = displayResponse?.ok ? displayResponse.cost : "-";
+  const topologyLayoutKey = useMemo(
+    () => JSON.stringify({
+      nodes: graph.nodes.map(({ id, device_type, group_id, layer }) => ({ id, device_type, group_id, layer })),
+      interfaces: graph.interfaces.map(({ id, node_id }) => ({ id, node_id })),
+      links: graph.links.map(({ id, from_interface, to_interface }) => ({ id, from_interface, to_interface })),
+      groups: graph.groups ?? [],
+      direction: layoutDirection,
+    }),
+    [graph.nodes, graph.interfaces, graph.links, graph.groups, layoutDirection]
+  );
+  const routeCalculationKey = useMemo(
+    () => JSON.stringify({
+      ...effectiveGraph,
+      nodes: effectiveGraph.nodes.map(({ x: _x, y: _y, ...node }) => node),
+    }),
+    [effectiveGraph]
+  );
 
   useEffect(() => {
     void calculateRoute(effectiveGraph, fromInterface, toInterface);
-  }, [effectiveGraph, fromInterface, toInterface, routeMode, trafficProtocol, trafficPort]);
+  }, [routeCalculationKey, fromInterface, toInterface, routeMode, trafficProtocol, trafficPort]);
 
   useEffect(() => {
     let cancelled = false;
+    logEvent("topology.layout.start", { direction: layoutDirection, nodes: graph.nodes.length, links: graph.links.length });
     const fallbackLayout = buildLayout(graph, layoutDirection);
     setLayout(fallbackLayout);
 
@@ -182,18 +200,20 @@ function App() {
       .then((nextLayout) => {
         if (!cancelled) {
           setLayout(nextLayout);
+          logEvent("topology.layout.ready", { engine: nextLayout.engine, width: nextLayout.width, height: nextLayout.height });
         }
       })
       .catch(() => {
         if (!cancelled) {
           setLayout(fallbackLayout);
+          logEvent("topology.layout.fallback", { engine: fallbackLayout.engine });
         }
       });
 
     return () => {
       cancelled = true;
     };
-  }, [graph, layoutDirection]);
+  }, [topologyLayoutKey]);
 
   async function calculateRoute(
     nextGraph = effectiveGraph,
@@ -210,13 +230,22 @@ function App() {
     };
 
     try {
+      logEvent("route.calculate", {
+        mode: request.mode,
+        from: nextFromInterface,
+        to: nextToInterface,
+        protocol: request.traffic?.protocol,
+        port: request.traffic?.port,
+      });
       const wasm = await loadWasm();
       const response = JSON.parse(wasm.shortest_path(JSON.stringify(request))) as RouteResponse;
       setRouteResponse(response);
       setStatus(response.ok ? routeStatusLabel(response.status) : response.error.message);
+      logEvent("route.result", response.ok ? { status: response.status, cost: response.cost } : { error: response.error });
     } catch (error) {
       setRouteResponse(null);
       setStatus(error instanceof Error ? error.message : "WASMの読み込みに失敗しました");
+      logEvent("route.error", { message: error instanceof Error ? error.message : String(error) });
     }
   }
 
@@ -239,15 +268,18 @@ function App() {
       setToInterface(lastInterface);
       setRouteResponse(null);
       setStatus(`${file.name} を読み込みました`);
+      logEvent("topology.import", { file: file.name, nodes: nextGraph.nodes.length, links: nextGraph.links.length });
       void calculateRoute(nextGraph, firstInterface, lastInterface);
     } catch (error) {
       setStatus(error instanceof Error ? error.message : "トポロジJSON/YAMLが不正です");
+      logEvent("topology.import.error", { file: file.name, message: error instanceof Error ? error.message : String(error) });
     }
   }
 
   function exportGraphAsYaml() {
     downloadTextFile("pathlet-topology.yaml", stringifyYaml(exportableGraph(graph)), "application/yaml;charset=utf-8");
     setStatus("YAMLをExportしました");
+    logEvent("topology.export", { nodes: graph.nodes.length, links: graph.links.length });
   }
 
   async function importTrafficTests(event: ChangeEvent<HTMLInputElement>) {
@@ -260,10 +292,12 @@ function App() {
       const suite = parseTestSuiteText(await file.text(), file.name);
       setTrafficTests(suite.tests);
       setTrafficTestResults({});
-      setSelectedTrafficTestId(null);
+      setSelectedTrafficTestId(suite.tests[0]?.id ?? null);
       setStatus(`${file.name} の試験を読み込みました`);
+      logEvent("tests.import", { file: file.name, tests: suite.tests.length });
     } catch (error) {
       setStatus(error instanceof Error ? error.message : "試験JSON/YAMLが不正です");
+      logEvent("tests.import.error", { file: file.name, message: error instanceof Error ? error.message : String(error) });
     } finally {
       event.target.value = "";
     }
@@ -335,7 +369,9 @@ function App() {
         },
       },
     ]);
+    setSelectedTrafficTestId(testId);
     setStatus(`${testId} を追加しました`);
+    logEvent("tests.add", { testId });
   }
 
   function updateTrafficTest(testId: string, patch: Partial<TrafficTestRecordModel>) {
@@ -351,13 +387,15 @@ function App() {
   }
 
   function deleteTrafficTest(testId: string) {
-    setTrafficTests((currentTests) => currentTests.filter((test) => test.id !== testId));
-    setSelectedTrafficTestId((currentId) => currentId === testId ? null : currentId);
+    const remainingTests = trafficTests.filter((test) => test.id !== testId);
+    setTrafficTests(remainingTests);
+    setSelectedTrafficTestId((currentId) => currentId === testId ? remainingTests[0]?.id ?? null : currentId);
     setTrafficTestResults((currentResults) => {
       const { [testId]: _removed, ...nextResults } = currentResults;
       return nextResults;
     });
     setStatus(`${testId} を削除しました`);
+    logEvent("tests.delete", { testId });
   }
 
   function selectTrafficTest(testId: string) {
@@ -365,6 +403,7 @@ function App() {
     if (!test) {
       return;
     }
+    logEvent("tests.select", { testId });
     setSelectedTrafficTestId(testId);
     setTrafficProtocol(test.protocol);
     if (test.protocol !== "icmp") {
@@ -390,24 +429,29 @@ function App() {
     const test = trafficTests.find((testItem) => testItem.id === testId);
     if (!test) {
       setStatus(`${testId} が見つかりません`);
+      logEvent("tests.run.missing", { testId });
       return;
     }
 
+    logEvent("tests.run.start", { testId: test.id });
     const result = await executeTrafficTest(test, true);
     setTrafficTestResults((currentResults) => ({ ...currentResults, [test.id]: result }));
     setSelectedTrafficTestId(test.id);
     setStatus(`${test.id}: ${result.message}`);
+    logEvent("tests.run.result", { testId: test.id, status: result.status, message: result.message });
   }
 
   async function runAllTrafficTests() {
     const enabledTests = trafficTests.filter((test) => test.enabled);
     const nextResults: Record<string, TrafficTestResultModel> = {};
+    logEvent("tests.runAll.start", { tests: enabledTests.length });
     for (const test of enabledTests) {
       nextResults[test.id] = await executeTrafficTest(test, false);
     }
     setTrafficTestResults((currentResults) => ({ ...currentResults, ...nextResults }));
     const passCount = Object.values(nextResults).filter((result) => result.status === "pass").length;
     setStatus(`通信試験 ${passCount} / ${enabledTests.length} 件 PASS`);
+    logEvent("tests.runAll.result", { pass: passCount, total: enabledTests.length });
   }
 
   async function executeTrafficTest(test: TrafficTestRecordModel, focusRoute: boolean): Promise<TrafficTestResultModel> {
@@ -436,6 +480,7 @@ function App() {
       if (focusRoute) {
         setRouteResponse(null);
       }
+      logEvent("tests.run.error", { testId: test.id, message: error instanceof Error ? error.message : String(error) });
       return {
         test_id: test.id,
         status: "error",
@@ -457,17 +502,6 @@ function App() {
     void calculateRoute(applyRuntimeState(nextGraph, downNodeIds, downInterfaceIds), fromInterface, toInterface);
   }
 
-  function updateLinkCost(linkId: string, cost: number) {
-    const nextGraph = {
-      ...graph,
-      links: graph.links.map((link) => (link.id === linkId ? { ...link, cost } : link)),
-    };
-    setGraph(nextGraph);
-    setSelectedLinkId(linkId);
-    setActiveModal("link");
-    void calculateRoute(applyRuntimeState(nextGraph, downNodeIds, downInterfaceIds), fromInterface, toInterface);
-  }
-
   function updateLinkFromTable(linkId: string, patch: Partial<LinkModel>) {
     const nextGraph = {
       ...graph,
@@ -475,6 +509,26 @@ function App() {
     };
     setGraph(nextGraph);
     setSelectedLinkId(linkId);
+    void calculateRoute(applyRuntimeState(nextGraph, downNodeIds, downInterfaceIds), fromInterface, toInterface);
+  }
+
+  function updateNode(nodeId: string, patch: Partial<GraphModel["nodes"][number]>) {
+    const nextGraph = {
+      ...graph,
+      nodes: graph.nodes.map((node) => (node.id === nodeId ? { ...node, ...patch } : node)),
+    };
+    setGraph(nextGraph);
+    void calculateRoute(applyRuntimeState(nextGraph, downNodeIds, downInterfaceIds), fromInterface, toInterface);
+  }
+
+  function updateInterface(interfaceId: string, patch: Partial<GraphModel["interfaces"][number]>) {
+    const nextGraph = {
+      ...graph,
+      interfaces: graph.interfaces.map((interfaceItem) =>
+        interfaceItem.id === interfaceId ? { ...interfaceItem, ...patch } : interfaceItem
+      ),
+    };
+    setGraph(nextGraph);
     void calculateRoute(applyRuntimeState(nextGraph, downNodeIds, downInterfaceIds), fromInterface, toInterface);
   }
 
@@ -489,6 +543,7 @@ function App() {
 
   function setRouteEndpoint(target: "from" | "to", interfaceId: string) {
     setSelectedTrafficTestId(null);
+    logEvent("route.endpoint.select", { target, interfaceId });
     if (target === "from") {
       setFromInterface(interfaceId);
       setSelectionTarget("to");
@@ -569,10 +624,17 @@ function App() {
   }
 
   function moveNode(nodeId: string, x: number, y: number) {
+    const nextX = clamp(x, 44, Math.max(44, layout.width - 44));
+    const nextY = clamp(y, 44, Math.max(44, layout.height - 44));
+    setLayout((currentLayout) => {
+      const nextNodes = new Map(currentLayout.nodes);
+      nextNodes.set(nodeId, { x: nextX, y: nextY });
+      return { ...currentLayout, nodes: nextNodes };
+    });
     setGraph((currentGraph) => ({
       ...currentGraph,
       nodes: currentGraph.nodes.map((node) =>
-        node.id === nodeId ? { ...node, x: clamp(x, 44, 716), y: clamp(y, 68, 416) } : node
+        node.id === nodeId ? { ...node, x: nextX, y: nextY } : node
       ),
     }));
   }
@@ -692,9 +754,9 @@ function App() {
           direction: "egress",
           nat_type: "source",
           original: "any",
-          translated: "203.0.113.10",
+          translated: "",
           protocol: "any",
-          active: true,
+          active: false,
         },
       ],
     }));
@@ -762,6 +824,7 @@ function App() {
   function selectNode(nodeId: string) {
     setSelectedNodeId(nodeId);
     setActiveModal("node");
+    logEvent("topology.node.open", { nodeId });
   }
 
   function toggleNodeStatus(nodeId: string) {
@@ -776,8 +839,14 @@ function App() {
     void calculateRoute(applyRuntimeState(graph, downNodeIds, nextDownInterfaceIds), fromInterface, toInterface);
   }
 
+  function showManualTrafficCheck() {
+    setSelectedTrafficTestId(null);
+    void calculateRoute(effectiveGraph, fromInterface, toInterface);
+    logEvent("view.trafficCheck.manualRoute", { from: fromInterface, to: toInterface });
+  }
+
   const viewTabs = [
-    { id: "topology", label: "トポロジ", icon: <Network size={16} /> },
+    { id: "topology", label: "通信確認", icon: <Network size={16} /> },
     { id: "rules", label: "ルール編集", icon: <Shield size={16} /> },
     { id: "tests", label: "通信試験", icon: <ListChecks size={16} /> },
   ] as const;
@@ -861,8 +930,10 @@ function App() {
         onLinkSelect={(linkId) => {
           setSelectedLinkId(linkId);
           setActiveModal("link");
+          logEvent("topology.link.open", { linkId });
         }}
         onNodeMove={moveNode}
+        onNodeMoveEnd={(nodeId) => logEvent("topology.node.moved", { nodeId })}
       />
     </div>
   );
@@ -989,6 +1060,8 @@ function App() {
         <section className="grid gap-4">
           <Card className="min-h-[560px] overflow-hidden">
             <CardHeader title="トポロジ" action={topologyControls} />
+            {advancedTopologySettings}
+            {topologyCanvas}
             <DecisionBanner
               diagnosis={routeDiagnosis}
               source={selectedTrafficTest ? trafficTestTitle(effectiveGraph, selectedTrafficTest).split(" -> ")[0] ?? selectedTrafficTest.source : trafficIntent.source_node_id}
@@ -996,8 +1069,6 @@ function App() {
               protocol={selectedTrafficTest ? `${selectedTrafficTest.protocol.toUpperCase()}${selectedTrafficTest.protocol === "icmp" ? "" : `/${selectedTrafficTest.port ?? 443}`}` : `${trafficProtocol.toUpperCase()}${trafficProtocol === "icmp" ? "" : `/${trafficPort}`}`}
               sourceLabel={selectedTrafficTest ? `表示中: 試験 ${selectedTrafficTest.name || selectedTrafficTest.id}` : "表示中: 手動条件"}
             />
-            {advancedTopologySettings}
-            {topologyCanvas}
           </Card>
         </section>
 
@@ -1007,7 +1078,14 @@ function App() {
               className={buttonClass(activeView === view.id ? "primary" : "secondary")}
               key={view.id}
               type="button"
-              onClick={() => setActiveView(view.id)}
+              onClick={() => {
+                setActiveView(view.id);
+                if (view.id === "topology") {
+                  showManualTrafficCheck();
+                } else {
+                  logEvent("view.change", { view: view.id });
+                }
+              }}
             >
               {view.icon}
               {view.label}
@@ -1079,10 +1157,12 @@ function App() {
                 onExportReport={exportTrafficTestReport}
                 onAdd={addTrafficTest}
                 onSelect={selectTrafficTest}
-                onUpdate={updateTrafficTest}
-                onDelete={deleteTrafficTest}
-                onRun={runTrafficTest}
                 onRunAll={runAllTrafficTests}
+                onOpenDetails={(testId) => {
+                  setSelectedTrafficTestId(testId);
+                  setActiveModal("test");
+                  logEvent("tests.detail.open", { testId });
+                }}
               />
             </Card>
           </section>
@@ -1098,7 +1178,7 @@ function App() {
                 graph={effectiveGraph}
                 link={graph.links.find((link) => link.id === selectedLinkId)}
                 onToggle={toggleLink}
-                onCostChange={updateLinkCost}
+                onUpdateLink={updateLinkFromTable}
               />
             ) : activeModal === "links" ? (
               <LinksPanel
@@ -1120,6 +1200,8 @@ function App() {
                 downInterfaceIds={downInterfaceIds}
                 onToggleNode={toggleNodeStatus}
                 onToggleInterface={toggleInterfaceStatus}
+                onUpdateNode={updateNode}
+                onUpdateInterface={updateInterface}
                 onSetEndpoint={setRouteEndpoint}
                 onAddRoute={addRoute}
                 onUpdateRoute={updateRoute}
@@ -1134,6 +1216,18 @@ function App() {
                   setSelectedLinkId(linkId);
                   setActiveModal("link");
                 }}
+              />
+            ) : activeModal === "test" ? (
+              <TrafficTestDetailPanel
+                graph={effectiveGraph}
+                test={trafficTests.find((test) => test.id === selectedTrafficTestId)}
+                result={selectedTrafficTestId ? trafficTestResults[selectedTrafficTestId] : undefined}
+                onUpdate={updateTrafficTest}
+                onDelete={(testId) => {
+                  deleteTrafficTest(testId);
+                  setActiveModal(null);
+                }}
+                onRun={runTrafficTest}
               />
             ) : (
               <GraphEditor
@@ -1171,6 +1265,10 @@ function App() {
 async function loadWasm() {
   await initWasm();
   return { shortest_path } satisfies WasmModule;
+}
+
+function logEvent(event: string, payload?: Record<string, unknown>) {
+  console.info(`[Pathlet] ${event}`, payload ?? {});
 }
 
 function DecisionBanner({

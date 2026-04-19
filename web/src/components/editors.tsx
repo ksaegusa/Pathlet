@@ -18,6 +18,7 @@ import { reachabilityScopeLabel, routeStatusLabel, testResultLabel } from "../fo
 import { causeCodeLabel, causeTone, diagnoseTrafficTest, endpointNameForIp, evaluationTone, factLabel, factTone, shortInterfaceLabel, trafficTestTitle } from "../diagnosis";
 import type {
   GraphModel,
+  InterfaceModel,
   LinkModel,
   NatRuleModel,
   NodeDeviceType,
@@ -136,12 +137,12 @@ export function SelectedLinkPanel({
   graph,
   link,
   onToggle,
-  onCostChange,
+  onUpdateLink,
 }: {
   graph: GraphModel;
   link: LinkModel | undefined;
   onToggle: (linkId: string) => void;
-  onCostChange: (linkId: string, cost: number) => void;
+  onUpdateLink: (linkId: string, patch: Partial<LinkModel>) => void;
 }) {
   if (!link) {
     return <EmptyMessage>トポロジまたは一覧からリンクを選んでください。</EmptyMessage>;
@@ -175,7 +176,17 @@ export function SelectedLinkPanel({
           min="1"
           type="number"
           value={link.cost}
-          onChange={(event) => onCostChange(link.id, Math.max(1, Number(event.target.value) || 1))}
+          onChange={(event) => onUpdateLink(link.id, { cost: Math.max(1, Number(event.target.value) || 1) })}
+        />
+      </Field>
+      <Field label="VLAN">
+        <input
+          className={inputClass}
+          min="1"
+          max="4094"
+          type="number"
+          value={link.vlan_id ?? ""}
+          onChange={(event) => onUpdateLink(link.id, { vlan_id: optionalNumber(event.target.value) })}
         />
       </Field>
     </div>
@@ -191,6 +202,8 @@ export function NodeDetailsPanel({
   downInterfaceIds,
   onToggleNode,
   onToggleInterface,
+  onUpdateNode,
+  onUpdateInterface,
   onSetEndpoint,
   onAddRoute,
   onUpdateRoute,
@@ -211,6 +224,8 @@ export function NodeDetailsPanel({
   downInterfaceIds: Set<string>;
   onToggleNode: (nodeId: string) => void;
   onToggleInterface: (interfaceId: string) => void;
+  onUpdateNode: (nodeId: string, patch: Partial<NodeModel>) => void;
+  onUpdateInterface: (interfaceId: string, patch: Partial<InterfaceModel>) => void;
   onSetEndpoint: (target: "from" | "to", interfaceId: string) => void;
   onAddRoute: (nodeId: string) => void;
   onUpdateRoute: (routeId: string, patch: Partial<RouteEntryModel>) => void;
@@ -274,6 +289,25 @@ export function NodeDetailsPanel({
         <div className="grid gap-1 text-sm text-zinc-600">
           <div>インターフェース: {interfaces.length}</div>
           <div>接続リンク: {connectedLinks.length}</div>
+          <div className="grid gap-2 pt-2 sm:grid-cols-2">
+            <Field label="default VRF">
+              <input
+                className={inputClass}
+                value={node.default_vrf_id ?? ""}
+                onChange={(event) => onUpdateNode(node.id, { default_vrf_id: event.target.value || undefined })}
+              />
+            </Field>
+            <Field label="default VLAN">
+              <input
+                className={inputClass}
+                min="1"
+                max="4094"
+                type="number"
+                value={node.default_vlan_id ?? ""}
+                onChange={(event) => onUpdateNode(node.id, { default_vlan_id: optionalNumber(event.target.value) })}
+              />
+            </Field>
+          </div>
           <div>
             {capabilities.defaultRouteOnly
               ? "Client は1ポートとデフォルトルートを基本に扱います。"
@@ -652,6 +686,25 @@ export function NodeDetailsPanel({
                   {interfaceDown ? "down" : "up"}
                 </Badge>
               </div>
+              <div className="grid gap-2 sm:grid-cols-2">
+                <Field label="VRF">
+                  <input
+                    className={inputClass}
+                    value={interfaceItem.vrf_id ?? ""}
+                    onChange={(event) => onUpdateInterface(interfaceItem.id, { vrf_id: event.target.value || undefined })}
+                  />
+                </Field>
+                <Field label="VLAN">
+                  <input
+                    className={inputClass}
+                    min="1"
+                    max="4094"
+                    type="number"
+                    value={interfaceItem.vlan_id ?? ""}
+                    onChange={(event) => onUpdateInterface(interfaceItem.id, { vlan_id: optionalNumber(event.target.value) })}
+                  />
+                </Field>
+              </div>
               <div className="flex flex-wrap gap-2">
                 <button
                   className={buttonClass(interfaceDown ? "success" : "danger")}
@@ -903,6 +956,7 @@ export function LinksPanel({
               <th className="px-3 py-2 font-semibold">from</th>
               <th className="px-3 py-2 font-semibold">to</th>
               <th className="px-3 py-2 font-semibold">bandwidth</th>
+              <th className="px-3 py-2 font-semibold">VLAN</th>
               <th className="px-3 py-2 font-semibold">cost</th>
               <th className="whitespace-nowrap px-3 py-2 font-semibold">操作</th>
             </tr>
@@ -917,6 +971,16 @@ export function LinksPanel({
                 <td className="px-3 py-2 whitespace-nowrap font-mono text-zinc-600">{interfaceLabel(graph, link.from_interface)}</td>
                 <td className="px-3 py-2 whitespace-nowrap font-mono text-zinc-600">{interfaceLabel(graph, link.to_interface)}</td>
                 <td className="px-3 py-2 font-mono text-zinc-700">{formatBandwidth(link.bandwidth_mbps)}</td>
+                <td className="px-3 py-2">
+                  <input
+                    className={inputClass}
+                    min="1"
+                    max="4094"
+                    type="number"
+                    value={link.vlan_id ?? ""}
+                    onChange={(event) => onUpdateLink(link.id, { vlan_id: optionalNumber(event.target.value) })}
+                  />
+                </td>
                 <td className="px-3 py-2">
                   <input
                     className={inputClass}
@@ -1347,10 +1411,8 @@ export function TrafficTestsPanel({
   onExportReport,
   onAdd,
   onSelect,
-  onUpdate,
-  onDelete,
-  onRun,
   onRunAll,
+  onOpenDetails,
 }: {
   graph: GraphModel;
   tests: TrafficTestRecordModel[];
@@ -1361,10 +1423,8 @@ export function TrafficTestsPanel({
   onExportReport: () => void;
   onAdd: () => void;
   onSelect: (testId: string) => void;
-  onUpdate: (testId: string, patch: Partial<TrafficTestRecordModel>) => void;
-  onDelete: (testId: string) => void;
-  onRun: (testId: string) => void;
   onRunAll: () => void;
+  onOpenDetails: (testId: string) => void;
 }) {
   const enabledCount = tests.filter((test) => test.enabled).length;
   const executedCount = tests.filter((test) => results[test.id]).length;
@@ -1372,19 +1432,27 @@ export function TrafficTestsPanel({
   const failCount = tests.filter((test) => results[test.id]?.status === "fail").length;
   const errorCount = tests.filter((test) => results[test.id]?.status === "error").length;
   const pendingCount = tests.length - executedCount;
-  const [expandedTestIds, setExpandedTestIds] = useState<Set<string>>(() => new Set());
-
-  function toggleTestDetails(testId: string) {
-    setExpandedTestIds((current) => {
-      const next = new Set(current);
-      if (next.has(testId)) {
-        next.delete(testId);
-        return next;
-      }
-      next.add(testId);
-      return next;
-    });
-  }
+  const [query, setQuery] = useState("");
+  const [statusFilter, setStatusFilter] = useState<"all" | "pending" | "pass" | "fail" | "error">("all");
+  const selectedTest = tests.find((test) => test.id === selectedTestId) ?? tests[0];
+  const normalizedQuery = query.trim().toLowerCase();
+  const visibleTests = tests.filter((test) => {
+    const result = results[test.id];
+    const status = result?.status ?? "pending";
+    const diagnosis = diagnoseTrafficTest(result, test);
+    const title = trafficTestTitle(graph, test);
+    const matchesStatus = statusFilter === "all" || status === statusFilter;
+    const matchesQuery = !normalizedQuery || [
+      test.id,
+      test.name ?? "",
+      test.source,
+      test.destination,
+      test.protocol,
+      title,
+      diagnosis.cause.code,
+    ].some((value) => value.toLowerCase().includes(normalizedQuery));
+    return matchesStatus && matchesQuery;
+  });
 
   return (
     <div className="grid gap-4 p-4">
@@ -1430,71 +1498,116 @@ export function TrafficTestsPanel({
 
       {tests.length ? (
         <div className="grid gap-3">
-          {tests.map((test) => {
-            const result = results[test.id];
-            const expanded = expandedTestIds.has(test.id);
-            const diagnosis = diagnoseTrafficTest(result, test);
-            const protocol = test.port ? `${test.protocol.toUpperCase()}/${test.port}` : test.protocol.toUpperCase();
-            const selected = selectedTestId === test.id;
-            return (
-              <div className={cn(
-                "rounded-lg border bg-white p-3 transition",
-                selected && "ring-2 ring-teal-300",
-                result?.status === "pass" && "border-teal-200",
-                result?.status === "fail" && "border-red-200 bg-red-50/40",
-                result?.status === "error" && "border-red-200 bg-red-50/40",
-                !result && "border-zinc-200"
-              )} key={test.id}>
-                <div className="grid gap-3 lg:grid-cols-[minmax(0,1fr)_300px]">
-                  <div className="min-w-0">
-                    <div className="flex flex-wrap items-center gap-2">
-                      <Badge tone={evaluationTone(diagnosis.evaluation.result)}>{diagnosis.evaluation.result}</Badge>
-                      <Badge tone={causeTone(diagnosis.cause.code, diagnosis.evaluation.result)}>{causeCodeLabel(diagnosis.cause.code)}</Badge>
-                      <Badge>{protocol}</Badge>
-                      <Badge tone={test.expectations.reachable ? "success" : "danger"}>期待 {test.expectations.reachable ? "到達可能" : "到達不可"}</Badge>
-                      <Badge tone="muted">{reachabilityScopeLabel(test.expectations.scope)}</Badge>
-                    </div>
-                    <div className="mt-2 break-words text-base font-semibold text-zinc-950">
-                      {trafficTestTitle(graph, test)}
-                    </div>
-                    <div className="mt-2 flex flex-wrap gap-2">
-                      <Badge tone={factTone(diagnosis.facts.e2e)}>E2E {factLabel(diagnosis.facts.e2e)}</Badge>
-                      <Badge tone={factTone(diagnosis.facts.forward)}>FWD {factLabel(diagnosis.facts.forward)}</Badge>
-                      <Badge tone={factTone(diagnosis.facts.reverse)}>REV {factLabel(diagnosis.facts.reverse)}</Badge>
-                    </div>
-                    <div className="mt-2 break-words font-mono text-xs text-zinc-500">{test.source} {"->"} {test.destination}</div>
-                    <div className="mt-2 text-sm font-medium text-zinc-700">{diagnosis.cause.message}</div>
-                  </div>
-                  <div className="flex flex-wrap items-start justify-end gap-2">
-                    <label className="inline-flex min-h-9 items-center gap-2 rounded-md border border-zinc-200 bg-white px-3 text-sm font-semibold text-zinc-700">
-                      <input checked={test.enabled} type="checkbox" onChange={(event) => onUpdate(test.id, { enabled: event.target.checked })} />
-                      enabled
-                    </label>
-                    <button className={cn(buttonClass(selected ? "success" : "secondary"), "whitespace-nowrap")} type="button" onClick={() => onSelect(test.id)}>
-                      {selected ? "表示中" : "トポロジ表示"}
+          <div className="grid gap-2 rounded-md border border-zinc-200 bg-white p-3 md:grid-cols-[minmax(0,1fr)_180px]">
+            <Field label="検索">
+              <input
+                className={inputClass}
+                placeholder="id / name / IP / cause"
+                value={query}
+                onChange={(event) => setQuery(event.target.value)}
+              />
+            </Field>
+            <Field label="状態">
+              <select className={inputClass} value={statusFilter} onChange={(event) => setStatusFilter(event.target.value as typeof statusFilter)}>
+                <option value="all">すべて</option>
+                <option value="pending">未実行</option>
+                <option value="pass">PASS</option>
+                <option value="fail">FAIL</option>
+                <option value="error">ERROR</option>
+              </select>
+            </Field>
+          </div>
+          <div className="max-h-[620px] overflow-auto rounded-lg border border-zinc-200 bg-white">
+            {visibleTests.length ? (
+              <div className="min-w-[760px] divide-y divide-zinc-100">
+                {visibleTests.map((test) => {
+                  const result = results[test.id];
+                  const diagnosis = diagnoseTrafficTest(result, test);
+                  const protocol = test.port ? `${test.protocol.toUpperCase()}/${test.port}` : test.protocol.toUpperCase();
+                  const selected = selectedTest?.id === test.id;
+                  return (
+                    <button
+                      className={cn(
+                        "grid w-full grid-cols-[96px_minmax(220px,1fr)_100px_120px_110px] items-center gap-3 px-3 py-2 text-left transition hover:bg-zinc-50",
+                        selected && "bg-teal-50",
+                        result?.status === "fail" && "bg-red-50/50",
+                        result?.status === "error" && "bg-red-50/50"
+                      )}
+                      key={test.id}
+                      type="button"
+                      onClick={() => {
+                        onSelect(test.id);
+                        onOpenDetails(test.id);
+                      }}
+                    >
+                      <div><Badge tone={resultTone(result)}>{result ? testResultLabel(result.status) : "未実行"}</Badge></div>
+                      <div className="min-w-0">
+                        <div className="truncate text-sm font-semibold text-zinc-950">{test.name || test.id}</div>
+                        <div className="truncate font-mono text-xs text-zinc-500">{test.source} {"->"} {test.destination}</div>
+                      </div>
+                      <div className="text-xs font-semibold text-zinc-700">{protocol}</div>
+                      <div><Badge tone={test.expectations.reachable ? "success" : "danger"}>{test.expectations.reachable ? "期待OK" : "期待NG"}</Badge></div>
+                      <div className="min-w-0"><Badge tone={causeTone(diagnosis.cause.code, diagnosis.evaluation.result)}>{causeCodeLabel(diagnosis.cause.code)}</Badge></div>
                     </button>
-                    <button className={cn(buttonClass("secondary"), "whitespace-nowrap")} type="button" onClick={() => onRun(test.id)}>実行</button>
-                    <button className={cn(buttonClass("secondary"), "whitespace-nowrap")} type="button" onClick={() => toggleTestDetails(test.id)} aria-expanded={expanded}>
-                      {expanded ? "閉じる" : "展開"}
-                    </button>
-                    <button className={cn(buttonClass("danger"), "whitespace-nowrap")} type="button" onClick={() => onDelete(test.id)}>削除</button>
-                  </div>
-                </div>
-                {expanded ? (
-                  <div className="mt-3 border-t border-zinc-200 pt-3">
-                    <TrafficTestEditor graph={graph} test={test} onUpdate={onUpdate} />
-                    <div className="mt-3">
-                      <TrafficTestDetails test={test} result={result} />
-                    </div>
-                  </div>
-                ) : null}
+                  );
+                })}
               </div>
-            );
-          })}
+            ) : (
+              <EmptyMessage>条件に一致する試験はありません。</EmptyMessage>
+            )}
+          </div>
         </div>
       ) : (
         <EmptyMessage>通信試験はありません。試験を追加するか、試験JSON/YAMLを読み込んでください。</EmptyMessage>
       )}
+    </div>
+  );
+}
+
+export function TrafficTestDetailPanel({
+  graph,
+  test,
+  result,
+  onUpdate,
+  onDelete,
+  onRun,
+}: {
+  graph: GraphModel;
+  test: TrafficTestRecordModel | undefined;
+  result: TrafficTestResultModel | undefined;
+  onUpdate: (testId: string, patch: Partial<TrafficTestRecordModel>) => void;
+  onDelete: (testId: string) => void;
+  onRun: (testId: string) => void;
+}) {
+  if (!test) {
+    return <EmptyMessage>試験を選択してください。</EmptyMessage>;
+  }
+
+  const diagnosis = diagnoseTrafficTest(result, test);
+
+  return (
+    <div className="grid gap-3 p-4">
+      <div className="grid gap-3 rounded-lg border border-zinc-200 bg-white p-3">
+        <div className="flex flex-wrap items-start justify-between gap-2">
+          <div className="min-w-0">
+            <div className="flex flex-wrap items-center gap-2">
+              <Badge tone={evaluationTone(diagnosis.evaluation.result)}>{diagnosis.evaluation.result}</Badge>
+              <Badge tone={causeTone(diagnosis.cause.code, diagnosis.evaluation.result)}>{causeCodeLabel(diagnosis.cause.code)}</Badge>
+            </div>
+            <div className="mt-2 break-words text-base font-semibold text-zinc-950">{trafficTestTitle(graph, test)}</div>
+          </div>
+          <label className="inline-flex min-h-9 items-center gap-2 rounded-md border border-zinc-200 bg-white px-3 text-sm font-semibold text-zinc-700">
+            <input checked={test.enabled} type="checkbox" onChange={(event) => onUpdate(test.id, { enabled: event.target.checked })} />
+            enabled
+          </label>
+        </div>
+        <div className="flex flex-wrap gap-2">
+          <button className={buttonClass("secondary")} type="button" onClick={() => onRun(test.id)}>実行</button>
+          <button className={buttonClass("danger")} type="button" onClick={() => onDelete(test.id)}>削除</button>
+        </div>
+        <TrafficTestEditor graph={graph} test={test} onUpdate={onUpdate} />
+        <TrafficTestDetails test={test} result={result} />
+      </div>
     </div>
   );
 }
