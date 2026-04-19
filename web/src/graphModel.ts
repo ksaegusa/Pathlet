@@ -1,5 +1,5 @@
 import { parse as parseYaml } from "yaml";
-import { graphFromRfc7951, isRfc7951Graph } from "./adapters/rfc7951";
+import { graphFromYangJson, isYangJsonGraph } from "./adapters/yangJson";
 import type {
   GraphModel,
   InputGraphModel,
@@ -498,8 +498,8 @@ export function routeRequestOrGraphToGraph(parsed: unknown): GraphModel {
     throw new Error("nodes/interfaces/links を持つGraphModelまたはRouteRequestを指定してください");
   }
   const nextGraph = "graph" in parsed ? parsed.graph : parsed;
-  if (isRfc7951Graph(nextGraph)) {
-    return normalizeGraphModel(graphFromRfc7951(nextGraph));
+  if (isYangJsonGraph(nextGraph)) {
+    return normalizeGraphModel(graphFromYangJson(nextGraph));
   }
   if (!isRecord(nextGraph) || !Array.isArray(nextGraph.nodes) || !Array.isArray(nextGraph.interfaces) || !Array.isArray(nextGraph.links)) {
     throw new Error("nodes/interfaces/links を持つGraphModelまたはRouteRequestを指定してください");

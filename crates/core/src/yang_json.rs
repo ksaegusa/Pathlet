@@ -6,23 +6,23 @@ use crate::{
 };
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
-pub struct Rfc7951Graph {
+pub struct YangJsonGraph {
     #[serde(rename = "pathlet:nodes")]
-    pub nodes: Vec<Rfc7951Node>,
+    pub nodes: Vec<YangJsonNode>,
     #[serde(rename = "ietf-interfaces:interfaces")]
-    pub interfaces: Rfc7951Interfaces,
+    pub interfaces: YangJsonInterfaces,
     #[serde(rename = "pathlet:links")]
-    pub links: Vec<Rfc7951Link>,
+    pub links: Vec<YangJsonLink>,
     #[serde(
         default,
         rename = "ietf-routing:routing",
         skip_serializing_if = "Option::is_none"
     )]
-    pub routing: Option<Rfc7951Routing>,
+    pub routing: Option<YangJsonRouting>,
 }
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
-pub struct Rfc7951Node {
+pub struct YangJsonNode {
     pub id: String,
     #[serde(
         default,
@@ -45,13 +45,13 @@ pub struct Rfc7951Node {
 }
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
-pub struct Rfc7951Interfaces {
+pub struct YangJsonInterfaces {
     #[serde(default, rename = "interface")]
-    pub interface: Vec<Rfc7951Interface>,
+    pub interface: Vec<YangJsonInterface>,
 }
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
-pub struct Rfc7951Interface {
+pub struct YangJsonInterface {
     pub name: String,
     #[serde(rename = "pathlet:node-id")]
     pub node_id: String,
@@ -72,17 +72,17 @@ pub struct Rfc7951Interface {
         rename = "ietf-ip:ipv4",
         skip_serializing_if = "Option::is_none"
     )]
-    pub ipv4: Option<Rfc7951Ipv4>,
+    pub ipv4: Option<YangJsonIpv4>,
 }
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
-pub struct Rfc7951Ipv4 {
+pub struct YangJsonIpv4 {
     #[serde(default)]
-    pub address: Vec<Rfc7951Address>,
+    pub address: Vec<YangJsonAddress>,
 }
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
-pub struct Rfc7951Address {
+pub struct YangJsonAddress {
     pub ip: String,
     #[serde(
         default,
@@ -93,7 +93,7 @@ pub struct Rfc7951Address {
 }
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
-pub struct Rfc7951Link {
+pub struct YangJsonLink {
     pub id: String,
     #[serde(rename = "pathlet:from-interface")]
     pub from_interface: String,
@@ -112,36 +112,36 @@ pub struct Rfc7951Link {
 }
 
 #[derive(Clone, Debug, Default, Deserialize, Eq, PartialEq, Serialize)]
-pub struct Rfc7951Routing {
+pub struct YangJsonRouting {
     #[serde(default, rename = "control-plane-protocols")]
-    pub control_plane_protocols: Rfc7951ControlPlaneProtocols,
+    pub control_plane_protocols: YangJsonControlPlaneProtocols,
 }
 
 #[derive(Clone, Debug, Default, Deserialize, Eq, PartialEq, Serialize)]
-pub struct Rfc7951ControlPlaneProtocols {
+pub struct YangJsonControlPlaneProtocols {
     #[serde(default, rename = "control-plane-protocol")]
-    pub control_plane_protocol: Vec<Rfc7951ControlPlaneProtocol>,
+    pub control_plane_protocol: Vec<YangJsonControlPlaneProtocol>,
 }
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
-pub struct Rfc7951ControlPlaneProtocol {
+pub struct YangJsonControlPlaneProtocol {
     #[serde(rename = "type")]
     pub protocol_type: String,
     pub name: String,
     #[serde(rename = "pathlet:node-id")]
     pub node_id: String,
     #[serde(default, rename = "static-routes")]
-    pub static_routes: Rfc7951StaticRoutes,
+    pub static_routes: YangJsonStaticRoutes,
 }
 
 #[derive(Clone, Debug, Default, Deserialize, Eq, PartialEq, Serialize)]
-pub struct Rfc7951StaticRoutes {
+pub struct YangJsonStaticRoutes {
     #[serde(default, rename = "ipv4")]
-    pub ipv4: Vec<Rfc7951StaticRoute>,
+    pub ipv4: Vec<YangJsonStaticRoute>,
 }
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
-pub struct Rfc7951StaticRoute {
+pub struct YangJsonStaticRoute {
     pub name: String,
     #[serde(rename = "destination-prefix")]
     pub destination_prefix: String,
@@ -187,7 +187,7 @@ pub struct Rfc7951StaticRoute {
     pub active: bool,
 }
 
-pub fn graph_from_rfc7951(input: Rfc7951Graph) -> Graph {
+pub fn graph_from_yang_json(input: YangJsonGraph) -> Graph {
     Graph {
         nodes: input
             .nodes
@@ -291,7 +291,7 @@ mod tests {
     use super::*;
 
     #[test]
-    fn imports_namespace_qualified_fixture_with_pathlet_extensions() {
+    fn imports_yang_json_fixture_with_pathlet_extensions() {
         let fixture = r#"
         {
           "pathlet:nodes": [
@@ -361,8 +361,8 @@ mod tests {
         }
         "#;
 
-        let input = serde_json::from_str::<Rfc7951Graph>(fixture).unwrap();
-        let graph = graph_from_rfc7951(input);
+        let input = serde_json::from_str::<YangJsonGraph>(fixture).unwrap();
+        let graph = graph_from_yang_json(input);
 
         assert_eq!(graph.nodes[0].default_vrf_id.as_deref(), Some("blue"));
         assert_eq!(graph.interfaces[0].vrf_id.as_deref(), Some("blue"));

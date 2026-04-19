@@ -6,7 +6,7 @@ use std::net::Ipv4Addr;
 mod ip;
 mod nat;
 mod policy;
-pub mod rfc7951;
+pub mod yang_json;
 
 use ip::{interface_ip, ipv4_prefix_match};
 use nat::{NatState, apply_nat_stage, apply_reverse_nat_state};
