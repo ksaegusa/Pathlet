@@ -8,16 +8,15 @@ import {
   nodeLabelLines,
   sanitizeClassName,
 } from "../graphModel";
-import type { GraphModel, InterfaceDisplayMode, LayoutDirection, RouteEdgeDirection } from "../types";
+import type { GraphModel, InterfaceDisplayMode, RouteEdgeDirection } from "../types";
+import type { TopologyLayoutModel } from "../types";
+import type { NodeDecisionState } from "../diagnosis";
+import { nodeStateLabel } from "../diagnosis";
 import { cn } from "./common";
-
-const nodeRadius = 26;
-const interfaceRadius = 6;
 
 export function Topology({
   graph,
   layout,
-  layoutDirection,
   interfaceDisplayMode,
   routeEdgeDirections,
   loopLinkIds,
@@ -27,14 +26,14 @@ export function Topology({
   toInterface,
   downNodeIds,
   downInterfaceIds,
+  nodeStates,
   onNodeSelect,
   onInterfaceSelect,
   onLinkSelect,
   onNodeMove,
 }: {
   graph: GraphModel;
-  layout: Map<string, { x: number; y: number }>;
-  layoutDirection: LayoutDirection;
+  layout: TopologyLayoutModel;
   interfaceDisplayMode: InterfaceDisplayMode;
   routeEdgeDirections: Map<string, RouteEdgeDirection>;
   loopLinkIds: Set<string>;
@@ -44,6 +43,7 @@ export function Topology({
   toInterface: string;
   downNodeIds: Set<string>;
   downInterfaceIds: Set<string>;
+  nodeStates: Map<string, NodeDecisionState>;
   onNodeSelect: (nodeId: string) => void;
   onInterfaceSelect: (interfaceId: string) => void;
   onLinkSelect: (linkId: string) => void;
@@ -56,10 +56,39 @@ export function Topology({
     graph.interfaces.map((interfaceItem) => [interfaceItem.id, interfaceItem])
   );
   const groups = graphGroups(graph);
-  const topologyContentWidth = 1060;
-  const groupWidth = topologyContentWidth / Math.max(groups.length, 1);
-  const groupHeight = 404 / Math.max(groups.length, 1);
   const hasRoute = routeNodeIds.size > 0;
+  const nodeRadius = layout.density === "crowded" ? 16 : layout.density === "dense" ? 21 : 26;
+  const interfaceRadius = layout.density === "crowded" ? 4 : 6;
+  const nodeChipWidth = layout.density === "crowded" ? 54 : 58;
+  const renderedHeight = Math.min(860, Math.max(layout.engine === "elk" ? 380 : 520, layout.height * 0.78));
+  const groupBounds = layout.groups
+    ? [...layout.groups.entries()].map(([id, group]) => ({ id, ...group }))
+    : groups.flatMap((group) => {
+        const points = graph.nodes
+          .filter((node) => nodeGroupId(node) === group.id)
+          .map((node) => layout.nodes.get(node.id))
+          .filter((point): point is { x: number; y: number } => Boolean(point));
+        if (!points.length) {
+          return [];
+        }
+
+        const minX = Math.min(...points.map((point) => point.x));
+        const maxX = Math.max(...points.map((point) => point.x));
+        const minY = Math.min(...points.map((point) => point.y));
+        const maxY = Math.max(...points.map((point) => point.y));
+        const paddingX = layout.density === "crowded" ? 36 : 58;
+        const paddingY = layout.density === "crowded" ? 34 : 52;
+        return [
+          {
+            id: group.id,
+            label: group.label,
+            x: Math.max(12, minX - paddingX),
+            y: Math.max(12, minY - paddingY),
+            width: Math.min(layout.width - 24, maxX - minX + paddingX * 2),
+            height: Math.min(layout.height - 24, maxY - minY + paddingY * 2),
+          },
+        ];
+      });
 
   function pointFromEvent(event: ReactPointerEvent<SVGSVGElement>) {
     const svg = event.currentTarget;
@@ -100,8 +129,9 @@ export function Topology({
 
   return (
     <svg
-      className="topology block h-[560px] w-full"
-      viewBox="0 0 1120 460"
+      className={cn("topology block w-full", `density-${layout.density}`)}
+      style={{ height: renderedHeight }}
+      viewBox={`0 0 ${layout.width} ${layout.height}`}
       role="img"
       aria-label="Network topology"
       onPointerMove={(event) => {
@@ -120,20 +150,20 @@ export function Topology({
       onPointerUp={finishNodeDrag}
       onPointerLeave={finishNodeDrag}
     >
-      {groups.map((group, index) => (
+      {groupBounds.map((group) => (
         <g key={group.id}>
           <rect
-            className="fill-white/45 stroke-zinc-200"
-            x={layoutDirection === "lr" ? 30 + index * groupWidth : 30}
-            y={layoutDirection === "lr" ? 24 : 24 + index * groupHeight}
-            width={layoutDirection === "lr" ? Math.max(120, groupWidth - 30) : topologyContentWidth}
-            height={layoutDirection === "lr" ? 404 : Math.max(72, groupHeight - 18)}
-            rx="14"
+            className="topology-group"
+            x={group.x}
+            y={group.y}
+            width={group.width}
+            height={group.height}
+            rx="8"
           />
           <text
             className="fill-zinc-500 text-xs font-semibold uppercase"
-            x={layoutDirection === "lr" ? 30 + index * groupWidth + Math.max(120, groupWidth - 30) / 2 : 560}
-            y={layoutDirection === "lr" ? 48 : 24 + index * groupHeight + 24}
+            x={group.x + group.width / 2}
+            y={group.y + 24}
           >
             {group.label}
           </text>
@@ -143,8 +173,8 @@ export function Topology({
       {graph.links.map((link) => {
         const fromNodeId = interfaceById.get(link.from_interface)?.node_id;
         const toNodeId = interfaceById.get(link.to_interface)?.node_id;
-        const from = fromNodeId ? layout.get(fromNodeId) : undefined;
-        const to = toNodeId ? layout.get(toNodeId) : undefined;
+        const from = fromNodeId ? layout.nodes.get(fromNodeId) : undefined;
+        const to = toNodeId ? layout.nodes.get(toNodeId) : undefined;
         if (!from || !to) {
           return null;
         }
@@ -160,8 +190,8 @@ export function Topology({
         const routeToNodeId = routeDirection
           ? interfaceById.get(routeDirection.to_interface)?.node_id
           : undefined;
-        const routeFrom = routeFromNodeId ? layout.get(routeFromNodeId) : undefined;
-        const routeTo = routeToNodeId ? layout.get(routeToNodeId) : undefined;
+        const routeFrom = routeFromNodeId ? layout.nodes.get(routeFromNodeId) : undefined;
+        const routeTo = routeToNodeId ? layout.nodes.get(routeToNodeId) : undefined;
         const routeGeometry = routeFrom && routeTo ? linkGeometry(routeFrom, routeTo) : geometry;
         return (
           <g key={link.id}>
@@ -188,7 +218,7 @@ export function Topology({
       })}
 
       {graph.nodes.map((node) => {
-        const point = layout.get(node.id);
+        const point = layout.nodes.get(node.id);
         if (!point) {
           return null;
         }
@@ -203,9 +233,16 @@ export function Topology({
           interfaces.some((interfaceItem) => interfaceItem.id === toInterface);
         const isDimmed = hasRoute && !routeNodeIds.has(node.id) && !isEndpointNode;
         const isClientNode = nodeDeviceType(node) === "client";
+        const nodeState = nodeStates.get(node.id);
+        const showNodeLabel =
+          layout.density !== "crowded" ||
+          Boolean(nodeState) ||
+          isEndpointNode ||
+          routeNodeIds.has(node.id);
         const nodeShapeClassName = cn(
           "node",
           `group-${sanitizeClassName(nodeGroupId(node))}`,
+          nodeState && `state-${nodeState.toLowerCase()}`,
           draggingNodeId === node.id && "dragging",
           nodeDown && "down",
           isDimmed && "dimmed"
@@ -237,27 +274,44 @@ export function Topology({
                 {...nodeHandlers}
               />
             )}
-            <text
-              className={cn(
-                "node-label",
-                draggingNodeId === node.id && "dragging",
-                isDimmed && "dimmed"
-              )}
-              x={point.x}
-              y={point.y + 4}
-              onClick={() => selectNodeUnlessDragged(node.id)}
-              onPointerDown={(event) => startNodeDrag(event, node.id)}
-            >
-              {labelLines.map((line, index) => (
-                <tspan
-                  x={point.x}
-                  dy={index === 0 ? `${(1 - labelLines.length) * 0.55}em` : "1.1em"}
-                  key={`${line}-${index}`}
-                >
-                  {line}
-                </tspan>
-              ))}
-            </text>
+            {showNodeLabel ? (
+              <text
+                className={cn(
+                  "node-label",
+                  draggingNodeId === node.id && "dragging",
+                  isDimmed && "dimmed"
+                )}
+                x={point.x}
+                y={point.y + 4}
+                onClick={() => selectNodeUnlessDragged(node.id)}
+                onPointerDown={(event) => startNodeDrag(event, node.id)}
+              >
+                {labelLines.map((line, index) => (
+                  <tspan
+                    x={point.x}
+                    dy={index === 0 ? `${(1 - labelLines.length) * 0.55}em` : "1.1em"}
+                    key={`${line}-${index}`}
+                  >
+                    {line}
+                  </tspan>
+                ))}
+              </text>
+            ) : null}
+            {nodeState ? (
+              <g>
+                <rect
+                  className={cn("node-state-chip", `state-${nodeState.toLowerCase()}`)}
+                  x={point.x - nodeChipWidth / 2}
+                  y={point.y + nodeRadius + 10}
+                  width={nodeChipWidth}
+                  height="18"
+                  rx="5"
+                />
+                <text className="node-state-label" x={point.x} y={point.y + nodeRadius + 23}>
+                  {nodeStateLabel(nodeState)}
+                </text>
+              </g>
+            ) : null}
             {interfaces.map((interfaceItem, index) => {
               const angle = (Math.PI * 2 * index) / Math.max(interfaces.length, 1);
               const role =
@@ -269,12 +323,21 @@ export function Topology({
               const interfaceDown = nodeDown || downInterfaceIds.has(interfaceItem.id);
               const interfaceInRoute = routeInterfaceIds.has(interfaceItem.id);
               if (
-                interfaceDisplayMode === "compact" &&
+                (interfaceDisplayMode === "compact" || layout.density === "crowded") &&
                 !role &&
+                !interfaceInRoute &&
                 !interfaceDown
               ) {
                 return null;
               }
+              const interfaceLabel =
+                role === "from"
+                  ? "F"
+                  : role === "to"
+                    ? "T"
+                    : interfaceDisplayMode === "detail" && layout.density === "normal"
+                      ? index + 1
+                      : "";
               return (
                 <g key={interfaceItem.id} onClick={() => onInterfaceSelect(interfaceItem.id)}>
                   <circle
@@ -296,7 +359,7 @@ export function Topology({
                     x={point.x + Math.cos(angle) * (nodeRadius + 25)}
                     y={point.y + Math.sin(angle) * (nodeRadius + 25) + 4}
                   >
-                    {role === "from" ? "F" : role === "to" ? "T" : interfaceDisplayMode === "detail" ? index + 1 : ""}
+                    {interfaceLabel}
                   </text>
                 </g>
               );

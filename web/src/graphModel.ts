@@ -23,6 +23,7 @@ import type {
   TrafficTestSuiteModel,
   TrafficIntent,
   TrafficProtocol,
+  TopologyLayoutModel,
   YangAclAttachmentModel,
   YangAclModel,
   YangInterfaceNodeModel,
@@ -265,23 +266,24 @@ export function sanitizeClassName(value: string) {
 export function buildLayout(graph: GraphModel, direction: LayoutDirection) {
   const layout = new Map<string, { x: number; y: number }>();
   const groups = graphGroups(graph);
-  const topologyContentWidth = 1060;
+  const topologyContentWidth = Math.max(1060, graph.nodes.length * 34);
   const groupWidth = topologyContentWidth / Math.max(groups.length, 1);
-  const groupHeight = 404 / Math.max(groups.length, 1);
+  const topologyContentHeight = Math.max(404, graph.nodes.length * 18);
+  const groupHeight = topologyContentHeight / Math.max(groups.length, 1);
 
   groups.forEach((group, groupIndex) => {
     const nodes = graph.nodes.filter((node) => nodeGroupId(node) === group.id);
     nodes.forEach((node, index) => {
-      const verticalSpacing = 340 / Math.max(nodes.length, 1);
-      const horizontalSpacing = 980 / Math.max(nodes.length, 1);
+      const verticalSpacing = Math.max(58, (topologyContentHeight - 64) / Math.max(nodes.length, 1));
+      const horizontalSpacing = Math.max(84, (topologyContentWidth - 80) / Math.max(nodes.length, 1));
       const autoX =
         direction === "lr"
           ? 30 + groupIndex * groupWidth + Math.max(120, groupWidth - 30) / 2
           : 70 + horizontalSpacing / 2 + index * horizontalSpacing;
       const autoY =
         direction === "lr"
-          ? 70 + verticalSpacing / 2 + index * verticalSpacing
-          : 24 + groupIndex * groupHeight + Math.max(72, groupHeight - 18) / 2 + 10;
+            ? 70 + verticalSpacing / 2 + index * verticalSpacing
+            : 24 + groupIndex * groupHeight + Math.max(72, groupHeight - 18) / 2 + 10;
       layout.set(node.id, {
         x: node.x ?? autoX,
         y: node.y ?? autoY,
@@ -289,7 +291,23 @@ export function buildLayout(graph: GraphModel, direction: LayoutDirection) {
     });
   });
 
-  return layout;
+  return {
+    nodes: layout,
+    width: topologyContentWidth + 60,
+    height: topologyContentHeight + 56,
+    density: layoutDensityForNodeCount(graph.nodes.length),
+    engine: "fallback",
+  } satisfies TopologyLayoutModel;
+}
+
+export function layoutDensityForNodeCount(nodeCount: number) {
+  if (nodeCount >= 80) {
+    return "crowded";
+  }
+  if (nodeCount >= 36) {
+    return "dense";
+  }
+  return "normal";
 }
 
 export function nodeLabelLines(nodeId: string) {

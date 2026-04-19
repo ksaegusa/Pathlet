@@ -120,7 +120,7 @@ export function Badge({
   tone = "default",
 }: {
   children: ReactNode;
-  tone?: "default" | "success" | "muted" | "danger";
+  tone?: "default" | "success" | "muted" | "danger" | "warn";
 }) {
   return (
     <span
@@ -129,6 +129,7 @@ export function Badge({
         tone === "success" && "bg-teal-50 text-teal-700 ring-teal-200",
         tone === "muted" && "bg-zinc-100 text-zinc-600 ring-zinc-200",
         tone === "danger" && "bg-red-50 text-red-700 ring-red-200",
+        tone === "warn" && "bg-yellow-50 text-yellow-800 ring-yellow-200",
         tone === "default" && "bg-zinc-50 text-zinc-700 ring-zinc-200"
       )}
     >
