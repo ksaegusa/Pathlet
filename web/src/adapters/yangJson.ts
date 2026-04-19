@@ -1,12 +1,12 @@
 import type { InputGraphModel, LinkModel, NodeDeviceType, NodeModel, RouteEntryModel, YangRoutingModel } from "../types";
 
-type Rfc7951Record = Record<string, unknown>;
+type YangJsonRecord = Record<string, unknown>;
 
-export function isRfc7951Graph(value: unknown): value is Rfc7951Record {
+export function isYangJsonGraph(value: unknown): value is YangJsonRecord {
   return isRecord(value) && "ietf-interfaces:interfaces" in value && "pathlet:nodes" in value;
 }
 
-export function graphFromRfc7951(value: Rfc7951Record): InputGraphModel {
+export function graphFromYangJson(value: YangJsonRecord): InputGraphModel {
   const nodes = arrayValue(value["pathlet:nodes"]).map((node) => ({
     id: stringValue(node.id),
     device_type: nodeDeviceType(node["pathlet:device-type"]),
@@ -99,15 +99,15 @@ function routesToYangRouting(routes: RouteEntryModel[]): YangRoutingModel[] {
   }));
 }
 
-function isRecord(value: unknown): value is Rfc7951Record {
+function isRecord(value: unknown): value is YangJsonRecord {
   return typeof value === "object" && value !== null;
 }
 
-function recordValue(value: unknown): Rfc7951Record {
+function recordValue(value: unknown): YangJsonRecord {
   return isRecord(value) ? value : {};
 }
 
-function arrayValue(value: unknown): Rfc7951Record[] {
+function arrayValue(value: unknown): YangJsonRecord[] {
   return Array.isArray(value) ? value.filter(isRecord) : [];
 }
 
