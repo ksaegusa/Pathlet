@@ -7,7 +7,9 @@ import { GraphEditor, LinksPanel, NatPanel, NodeDetailsPanel, PolicyPanel, Routi
 import { RouteDetails } from "./components/RouteDetails";
 import { Topology } from "./components/Topology";
 import { exampleGraph, exampleTrafficTests } from "./exampleGraph";
-import { modalTitle, routeStatusLabel, testResultLabel } from "./formatters";
+import { modalTitle, routeStatusLabel } from "./formatters";
+import { causeCodeLabel, causeTone, diagnoseRoute, diagnoseTrafficTest, endpointNameForIp, evaluationTone, factLabel, factTone, nodeDecisionStates, trafficTestTitle, type RouteDiagnosis } from "./diagnosis";
+import { buildElkLayout } from "./topologyLayout";
 import {
   applyRuntimeState,
   buildRouteRequestFromTest,
@@ -62,6 +64,7 @@ import type {
   TrafficTestRecordModel,
   TrafficTestResultModel,
   TrafficProtocol,
+  TopologyLayoutModel,
   WasmModule,
 } from "./types";
 import initWasm, { shortest_path } from "./wasm/pathlet_wasm.js";
@@ -93,11 +96,13 @@ function App() {
   const [downNodeIds, setDownNodeIds] = useState<Set<string>>(() => new Set());
   const [downInterfaceIds, setDownInterfaceIds] = useState<Set<string>>(() => new Set());
   const [layoutDirection, setLayoutDirection] = useState<LayoutDirection>("lr");
+  const [layout, setLayout] = useState<TopologyLayoutModel>(() => buildLayout(exampleGraph, "lr"));
   const [routeMode, setRouteMode] = useState<RouteMode>("routing_table");
   const [activeView, setActiveView] = useState<"topology" | "rules" | "tests">("topology");
   const [interfaceDisplayMode, setInterfaceDisplayMode] = useState<InterfaceDisplayMode>("compact");
   const [trafficTests, setTrafficTests] = useState<TrafficTestRecordModel[]>(exampleTrafficTests);
   const [trafficTestResults, setTrafficTestResults] = useState<Record<string, TrafficTestResultModel>>({});
+  const [selectedTrafficTestId, setSelectedTrafficTestId] = useState<string | null>(null);
   const [openRuleSections, setOpenRuleSections] = useState({
     routing: true,
     policy: false,
@@ -109,10 +114,6 @@ function App() {
     [graph, downNodeIds, downInterfaceIds]
   );
   const groups = useMemo(() => graphGroups(graph), [graph]);
-  const routeEdgeDirections = useMemo(() => routeDirectionsFromPath(routeResponse, effectiveGraph), [routeResponse, effectiveGraph]);
-  const loopLinkIds = useMemo(() => loopLinkIdsFromRoute(routeResponse, effectiveGraph), [routeResponse, effectiveGraph]);
-  const routeInterfaceIds = useMemo(() => interfaceIdsFromPath(routeResponse), [routeResponse]);
-  const routeNodeIds = useMemo(() => nodeIdsFromRoute(routeResponse, effectiveGraph), [routeResponse, effectiveGraph]);
   const trafficIntent = useMemo(
     () =>
       buildTrafficIntent(
@@ -127,14 +128,72 @@ function App() {
       ),
     [graph, fromInterface, toInterface, trafficProtocol, trafficPort, expectedReachable, reachabilityScope, expectedViaNodeId]
   );
-  const layout = useMemo(() => buildLayout(graph, layoutDirection), [graph, layoutDirection]);
+  const selectedTrafficTest = useMemo(
+    () => trafficTests.find((test) => test.id === selectedTrafficTestId),
+    [trafficTests, selectedTrafficTestId]
+  );
+  const selectedTrafficTestResult = selectedTrafficTest ? trafficTestResults[selectedTrafficTest.id] : undefined;
+  const displayResponse = selectedTrafficTest ? selectedTrafficTestResult?.response ?? null : routeResponse;
+  const displayIntent = useMemo(
+    () => selectedTrafficTest
+      ? {
+          source_node_id: endpointNameForIp(effectiveGraph, selectedTrafficTest.source),
+          destination_node_id: endpointNameForIp(effectiveGraph, selectedTrafficTest.destination),
+          protocol: selectedTrafficTest.protocol,
+          port: selectedTrafficTest.port,
+          expectations: selectedTrafficTest.expectations,
+        }
+      : trafficIntent,
+    [effectiveGraph, selectedTrafficTest, trafficIntent]
+  );
+  const routeDiagnosis = useMemo(
+    () => selectedTrafficTest ? diagnoseTrafficTest(selectedTrafficTestResult, selectedTrafficTest) : diagnoseRoute(routeResponse, trafficIntent),
+    [routeResponse, selectedTrafficTest, selectedTrafficTestResult, trafficIntent]
+  );
+  const displayRouteEdgeDirections = useMemo(() => routeDirectionsFromPath(displayResponse, effectiveGraph), [displayResponse, effectiveGraph]);
+  const displayLoopLinkIds = useMemo(() => loopLinkIdsFromRoute(displayResponse, effectiveGraph), [displayResponse, effectiveGraph]);
+  const displayRouteInterfaceIds = useMemo(() => interfaceIdsFromPath(displayResponse), [displayResponse]);
+  const displayRouteNodeIds = useMemo(() => nodeIdsFromRoute(displayResponse, effectiveGraph), [displayResponse, effectiveGraph]);
+  const nodeStates = useMemo(
+    () =>
+      nodeDecisionStates({
+        graph: effectiveGraph,
+        response: displayResponse,
+        intent: displayIntent,
+        downNodeIds,
+        downInterfaceIds,
+      }),
+    [effectiveGraph, displayResponse, displayIntent, downNodeIds, downInterfaceIds]
+  );
   const activeLinkCount = effectiveGraph.links.filter((link) => link.active).length;
   const downLinkCount = effectiveGraph.links.length - activeLinkCount;
-  const selectedCost = routeResponse?.ok ? routeResponse.cost : "-";
+  const selectedCost = displayResponse?.ok ? displayResponse.cost : "-";
 
   useEffect(() => {
     void calculateRoute(effectiveGraph, fromInterface, toInterface);
   }, [effectiveGraph, fromInterface, toInterface, routeMode, trafficProtocol, trafficPort]);
+
+  useEffect(() => {
+    let cancelled = false;
+    const fallbackLayout = buildLayout(graph, layoutDirection);
+    setLayout(fallbackLayout);
+
+    buildElkLayout(graph, layoutDirection)
+      .then((nextLayout) => {
+        if (!cancelled) {
+          setLayout(nextLayout);
+        }
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setLayout(fallbackLayout);
+        }
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [graph, layoutDirection]);
 
   async function calculateRoute(
     nextGraph = effectiveGraph,
@@ -201,6 +260,7 @@ function App() {
       const suite = parseTestSuiteText(await file.text(), file.name);
       setTrafficTests(suite.tests);
       setTrafficTestResults({});
+      setSelectedTrafficTestId(null);
       setStatus(`${file.name} の試験を読み込みました`);
     } catch (error) {
       setStatus(error instanceof Error ? error.message : "試験JSON/YAMLが不正です");
@@ -229,19 +289,24 @@ function App() {
       `- FAIL: ${failCount}`,
       `- ERROR: ${errorCount}`,
       "",
-      "| Result | Test | Source | Destination | Protocol | Scope | Expected | Message |",
-      "| --- | --- | --- | --- | --- | --- | --- | --- |",
+      "| E2E | FWD | REV | Evaluation | Cause | Test | Source | Destination | Protocol | Scope | Expected | Message |",
+      "| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |",
       ...trafficTests.map((test) => {
         const result = trafficTestResults[test.id];
+        const diagnosis = diagnoseTrafficTest(result, test);
         return [
-          result ? testResultLabel(result.status) : "未実行",
+          factLabel(diagnosis.facts.e2e),
+          factLabel(diagnosis.facts.forward),
+          factLabel(diagnosis.facts.reverse),
+          diagnosis.evaluation.result,
+          diagnosis.cause.code,
           markdownCell(test.name || test.id),
           markdownCell(test.source),
           markdownCell(test.destination),
           markdownCell(test.port ? `${test.protocol.toUpperCase()}/${test.port}` : test.protocol.toUpperCase()),
           test.expectations.scope === "forward_only" ? "片道" : "往復",
           test.expectations.reachable ? "到達可能" : "到達不可",
-          markdownCell(result?.message ?? "未実行"),
+          markdownCell(result?.message ?? diagnosis.cause.message),
         ].join(" | ");
       }).map((row) => `| ${row} |`),
       "",
@@ -287,11 +352,38 @@ function App() {
 
   function deleteTrafficTest(testId: string) {
     setTrafficTests((currentTests) => currentTests.filter((test) => test.id !== testId));
+    setSelectedTrafficTestId((currentId) => currentId === testId ? null : currentId);
     setTrafficTestResults((currentResults) => {
       const { [testId]: _removed, ...nextResults } = currentResults;
       return nextResults;
     });
     setStatus(`${testId} を削除しました`);
+  }
+
+  function selectTrafficTest(testId: string) {
+    const test = trafficTests.find((testItem) => testItem.id === testId);
+    if (!test) {
+      return;
+    }
+    setSelectedTrafficTestId(testId);
+    setTrafficProtocol(test.protocol);
+    if (test.protocol !== "icmp") {
+      setTrafficPort(test.port ?? 443);
+    }
+    setExpectedReachable(test.expectations.reachable);
+    setReachabilityScope(test.expectations.scope ?? "round_trip");
+    setExpectedViaNodeId("");
+    try {
+      const request = buildRouteRequestFromTest(effectiveGraph, test);
+      setFromInterface(request.from_interface);
+      setToInterface(request.to_interface);
+      setRouteMode(request.mode);
+    } catch {
+      // Keep the selected test visible even when its endpoints no longer match the topology.
+    }
+    if (trafficTestResults[testId]?.response) {
+      setRouteResponse(trafficTestResults[testId].response ?? null);
+    }
   }
 
   async function runTrafficTest(testId: string) {
@@ -303,6 +395,7 @@ function App() {
 
     const result = await executeTrafficTest(test, true);
     setTrafficTestResults((currentResults) => ({ ...currentResults, [test.id]: result }));
+    setSelectedTrafficTestId(test.id);
     setStatus(`${test.id}: ${result.message}`);
   }
 
@@ -395,6 +488,7 @@ function App() {
   }
 
   function setRouteEndpoint(target: "from" | "to", interfaceId: string) {
+    setSelectedTrafficTestId(null);
     if (target === "from") {
       setFromInterface(interfaceId);
       setSelectionTarget("to");
@@ -690,52 +784,8 @@ function App() {
 
   const topologyControls = (
     <div className="flex flex-wrap items-center justify-end gap-2">
-      <div className="inline-flex rounded-md border border-zinc-200 bg-white p-0.5">
-        {(["shortest_path", "routing_table"] as const).map((mode) => (
-          <button
-            className={cn(
-              "rounded px-2.5 py-1 text-xs font-semibold transition",
-              routeMode === mode ? "bg-teal-700 text-white" : "text-zinc-600 hover:bg-zinc-100"
-            )}
-            key={mode}
-            type="button"
-            onClick={() => setRouteMode(mode)}
-          >
-            {mode === "shortest_path" ? "Dijkstra" : "Routing Table"}
-          </button>
-        ))}
-      </div>
-      <div className="inline-flex rounded-md border border-zinc-200 bg-white p-0.5">
-        {(["compact", "detail"] as const).map((mode) => (
-          <button
-            className={cn(
-              "rounded px-2.5 py-1 text-xs font-semibold transition",
-              interfaceDisplayMode === mode ? "bg-teal-700 text-white" : "text-zinc-600 hover:bg-zinc-100"
-            )}
-            key={mode}
-            type="button"
-            onClick={() => setInterfaceDisplayMode(mode)}
-          >
-            {mode === "compact" ? "簡易" : "詳細"}
-          </button>
-        ))}
-      </div>
-      <div className="inline-flex rounded-md border border-zinc-200 bg-white p-0.5">
-        {(["lr", "td"] as const).map((direction) => (
-          <button
-            className={cn(
-              "rounded px-2.5 py-1 text-xs font-semibold transition",
-              layoutDirection === direction ? "bg-teal-700 text-white" : "text-zinc-600 hover:bg-zinc-100"
-            )}
-            key={direction}
-            type="button"
-            onClick={() => changeLayoutDirection(direction)}
-          >
-            {direction.toUpperCase()}
-          </button>
-        ))}
-      </div>
-      {status ? <Badge>{status}</Badge> : null}
+      <Badge tone={evaluationTone(routeDiagnosis.evaluation.result)}>{routeDiagnosis.evaluation.result}</Badge>
+      <Badge tone={causeTone(routeDiagnosis.cause.code, routeDiagnosis.evaluation.result)}>{causeCodeLabel(routeDiagnosis.cause.code)}</Badge>
     </div>
   );
 
@@ -796,16 +846,16 @@ function App() {
       <Topology
         graph={effectiveGraph}
         layout={layout}
-        layoutDirection={layoutDirection}
         interfaceDisplayMode={interfaceDisplayMode}
-        routeEdgeDirections={routeEdgeDirections}
-        loopLinkIds={loopLinkIds}
-        routeInterfaceIds={routeInterfaceIds}
-        routeNodeIds={routeNodeIds}
+        routeEdgeDirections={displayRouteEdgeDirections}
+        loopLinkIds={displayLoopLinkIds}
+        routeInterfaceIds={displayRouteInterfaceIds}
+        routeNodeIds={displayRouteNodeIds}
         fromInterface={fromInterface}
         toInterface={toInterface}
         downNodeIds={downNodeIds}
         downInterfaceIds={downInterfaceIds}
+        nodeStates={nodeStates}
         onNodeSelect={selectNode}
         onInterfaceSelect={selectInterface}
         onLinkSelect={(linkId) => {
@@ -827,16 +877,66 @@ function App() {
         graph={graph}
         protocol={trafficProtocol}
         port={trafficPort}
-          expectedReachable={expectedReachable}
-          reachabilityScope={reachabilityScope}
-          expectedViaNodeId={expectedViaNodeId}
-          onProtocolChange={setTrafficProtocol}
-          onPortChange={setTrafficPort}
-          onExpectedReachableChange={setExpectedReachable}
-          onReachabilityScopeChange={setReachabilityScope}
-          onExpectedViaNodeIdChange={setExpectedViaNodeId}
-        />
+        expectedReachable={expectedReachable}
+        reachabilityScope={reachabilityScope}
+        expectedViaNodeId={expectedViaNodeId}
+        onProtocolChange={(protocol) => {
+          setSelectedTrafficTestId(null);
+          setTrafficProtocol(protocol);
+        }}
+        onPortChange={(port) => {
+          setSelectedTrafficTestId(null);
+          setTrafficPort(port);
+        }}
+        onExpectedReachableChange={(reachable) => {
+          setSelectedTrafficTestId(null);
+          setExpectedReachable(reachable);
+        }}
+        onReachabilityScopeChange={(scope) => {
+          setSelectedTrafficTestId(null);
+          setReachabilityScope(scope);
+        }}
+        onExpectedViaNodeIdChange={(nodeId) => {
+          setSelectedTrafficTestId(null);
+          setExpectedViaNodeId(nodeId);
+        }}
+      />
     </div>
+  );
+
+  const advancedTopologySettings = (
+    <details className="border-t border-zinc-200 bg-white px-4 py-3">
+      <summary className="cursor-pointer text-xs font-semibold text-zinc-600">表示・判定設定</summary>
+      <div className="mt-3 flex flex-wrap gap-3">
+        <SegmentedControl
+          label="判定"
+          value={routeMode}
+          options={[
+            { value: "routing_table", label: "Routing Table" },
+            { value: "shortest_path", label: "Dijkstra" },
+          ]}
+          onChange={(value) => setRouteMode(value as RouteMode)}
+        />
+        <SegmentedControl
+          label="Interface"
+          value={interfaceDisplayMode}
+          options={[
+            { value: "compact", label: "簡易" },
+            { value: "detail", label: "詳細" },
+          ]}
+          onChange={(value) => setInterfaceDisplayMode(value as InterfaceDisplayMode)}
+        />
+        <SegmentedControl
+          label="Layout"
+          value={layoutDirection}
+          options={[
+            { value: "lr", label: "LR" },
+            { value: "td", label: "TD" },
+          ]}
+          onChange={(value) => changeLayoutDirection(value as LayoutDirection)}
+        />
+      </div>
+    </details>
   );
 
   function toggleRuleSection(section: keyof typeof openRuleSections) {
@@ -889,6 +989,14 @@ function App() {
         <section className="grid gap-4">
           <Card className="min-h-[560px] overflow-hidden">
             <CardHeader title="トポロジ" action={topologyControls} />
+            <DecisionBanner
+              diagnosis={routeDiagnosis}
+              source={selectedTrafficTest ? trafficTestTitle(effectiveGraph, selectedTrafficTest).split(" -> ")[0] ?? selectedTrafficTest.source : trafficIntent.source_node_id}
+              destination={selectedTrafficTest ? trafficTestTitle(effectiveGraph, selectedTrafficTest).split(" -> ")[1] ?? selectedTrafficTest.destination : trafficIntent.destination_node_id}
+              protocol={selectedTrafficTest ? `${selectedTrafficTest.protocol.toUpperCase()}${selectedTrafficTest.protocol === "icmp" ? "" : `/${selectedTrafficTest.port ?? 443}`}` : `${trafficProtocol.toUpperCase()}${trafficProtocol === "icmp" ? "" : `/${trafficPort}`}`}
+              sourceLabel={selectedTrafficTest ? `表示中: 試験 ${selectedTrafficTest.name || selectedTrafficTest.id}` : "表示中: 手動条件"}
+            />
+            {advancedTopologySettings}
             {topologyCanvas}
           </Card>
         </section>
@@ -920,14 +1028,19 @@ function App() {
               <div className="p-4 pt-0">{endpointAndIntentPanel}</div>
             </Card>
             <Card>
-              <CardHeader title="判定と理由" />
+              <CardHeader title="経路詳細" />
               <div className="p-4 pt-0">
-                <RouteDetails
-                  graph={effectiveGraph}
-                  intent={trafficIntent}
-                  routeMode={routeMode}
-                  response={routeResponse}
-                />
+                <details>
+                  <summary className="cursor-pointer text-sm font-semibold text-zinc-700">routes / policy / NAT の詳細を開く</summary>
+                  <div className="mt-3">
+                    <RouteDetails
+                      graph={effectiveGraph}
+                      intent={displayIntent}
+                      routeMode={routeMode}
+                      response={displayResponse}
+                    />
+                  </div>
+                </details>
               </div>
             </Card>
           </section>
@@ -960,10 +1073,12 @@ function App() {
                 graph={graph}
                 tests={trafficTests}
                 results={trafficTestResults}
+                selectedTestId={selectedTrafficTestId}
                 onImport={importTrafficTests}
                 onExport={exportTrafficTestsAsYaml}
                 onExportReport={exportTrafficTestReport}
                 onAdd={addTrafficTest}
+                onSelect={selectTrafficTest}
                 onUpdate={updateTrafficTest}
                 onDelete={deleteTrafficTest}
                 onRun={runTrafficTest}
@@ -1056,6 +1171,94 @@ function App() {
 async function loadWasm() {
   await initWasm();
   return { shortest_path } satisfies WasmModule;
+}
+
+function DecisionBanner({
+  diagnosis,
+  source,
+  destination,
+  protocol,
+  sourceLabel,
+}: {
+  diagnosis: RouteDiagnosis;
+  source: string;
+  destination: string;
+  protocol: string;
+  sourceLabel: string;
+}) {
+  return (
+    <div className={cn(
+      "grid gap-3 border-t border-zinc-200 px-4 py-4 lg:grid-cols-[minmax(0,1.1fr)_minmax(0,0.9fr)_minmax(0,1fr)]",
+      diagnosis.evaluation.result === "PASS" && "bg-teal-50/70",
+      diagnosis.evaluation.result === "FAIL" && "bg-red-50/80",
+      diagnosis.evaluation.result === "PENDING" && "bg-zinc-50",
+      diagnosis.evaluation.result === "ERROR" && "bg-red-50/80"
+    )}>
+      <div>
+        <div className="text-xs font-semibold uppercase text-zinc-500">事実</div>
+        <div className="mt-2 flex flex-wrap gap-2">
+          <Badge tone={factTone(diagnosis.facts.e2e)}>E2E {factLabel(diagnosis.facts.e2e)}</Badge>
+          <Badge tone={factTone(diagnosis.facts.forward)}>FWD {factLabel(diagnosis.facts.forward)}</Badge>
+          <Badge tone={factTone(diagnosis.facts.reverse)}>REV {factLabel(diagnosis.facts.reverse)}</Badge>
+        </div>
+        <div className="mt-2 break-words font-mono text-sm font-semibold text-zinc-900">
+          {source} {"->"} {destination} / {protocol}
+        </div>
+      </div>
+      <div className="min-w-0">
+        <div className="text-xs font-semibold uppercase text-zinc-500">評価</div>
+        <div className="mt-2 flex flex-wrap gap-2">
+          <Badge tone={evaluationTone(diagnosis.evaluation.result)}>{diagnosis.evaluation.result}</Badge>
+          <Badge tone={diagnosis.evaluation.expectedReachable ? "success" : "danger"}>
+            期待 {diagnosis.evaluation.expectedReachable ? "到達可能" : "到達不可"}
+          </Badge>
+        </div>
+        <div className="mt-2 text-sm font-semibold text-zinc-800">{sourceLabel}</div>
+      </div>
+      <div className="min-w-0">
+        <div className="text-xs font-semibold uppercase text-zinc-500">原因</div>
+        <div className="mt-2 flex flex-wrap gap-2">
+          <Badge tone={causeTone(diagnosis.cause.code, diagnosis.evaluation.result)}>{diagnosis.cause.code}</Badge>
+          <Badge tone="muted">{diagnosis.cause.leg}</Badge>
+        </div>
+        <div className="mt-2 text-sm font-semibold text-zinc-950">{diagnosis.cause.message}</div>
+        <div className="mt-1 break-words font-mono text-xs text-zinc-600">{diagnosis.cause.evidence}</div>
+      </div>
+    </div>
+  );
+}
+
+function SegmentedControl({
+  label,
+  value,
+  options,
+  onChange,
+}: {
+  label: string;
+  value: string;
+  options: Array<{ value: string; label: string }>;
+  onChange: (value: string) => void;
+}) {
+  return (
+    <div className="grid gap-1">
+      <span className="text-[11px] font-semibold uppercase text-zinc-500">{label}</span>
+      <div className="inline-flex rounded-md border border-zinc-200 bg-white p-0.5">
+        {options.map((option) => (
+          <button
+            className={cn(
+              "rounded px-2.5 py-1 text-xs font-semibold transition",
+              value === option.value ? "bg-teal-700 text-white" : "text-zinc-600 hover:bg-zinc-100"
+            )}
+            key={option.value}
+            type="button"
+            onClick={() => onChange(option.value)}
+          >
+            {option.label}
+          </button>
+        ))}
+      </div>
+    </div>
+  );
 }
 
 function markdownCell(value: string) {

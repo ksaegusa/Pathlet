@@ -28,6 +28,12 @@ select {
   text-anchor: middle;
 }
 
+.topology-group {
+  fill: rgb(255 255 255 / 0.52);
+  stroke: #e4e4e7;
+  stroke-width: 1.2;
+}
+
 .topology-link {
   cursor: pointer;
   fill: none;
@@ -107,6 +113,28 @@ select {
   stroke-dasharray: 8 6;
 }
 
+.node.state-affected {
+  fill: #fef2f2;
+  stroke: #dc2626;
+  stroke-width: 4;
+}
+
+.node.state-source,
+.node.state-goal,
+.node.state-fwd,
+.node.state-rev {
+  fill: #ecfdf5;
+  stroke: #059669;
+  stroke-width: 4;
+}
+
+.node.state-stop,
+.node.state-unconnected {
+  fill: #f4f4f5;
+  stroke: #71717a;
+  stroke-dasharray: 8 6;
+}
+
 .node.dimmed {
   fill: #f4f4f5;
   opacity: 0.38;
@@ -119,6 +147,14 @@ select {
   font-size: 12px;
   font-weight: 800;
   user-select: none;
+}
+
+.topology.density-dense .node-label {
+  font-size: 10px;
+}
+
+.topology.density-crowded .node-label {
+  font-size: 9px;
 }
 
 .node-label.dimmed {
@@ -159,6 +195,41 @@ select {
 .interface-label {
   fill: #27272a;
   font-size: 13px;
+  font-weight: 900;
+  pointer-events: none;
+}
+
+.topology.density-crowded .interface-label {
+  font-size: 9px;
+}
+
+.node-state-chip {
+  fill: #f4f4f5;
+  stroke: #d4d4d8;
+  stroke-width: 1;
+}
+
+.node-state-chip.state-source,
+.node-state-chip.state-goal,
+.node-state-chip.state-fwd,
+.node-state-chip.state-rev {
+  fill: #d1fae5;
+  stroke: #34d399;
+}
+
+.node-state-chip.state-affected {
+  fill: #fee2e2;
+  stroke: #f87171;
+}
+
+.node-state-chip.state-stop {
+  fill: #fef3c7;
+  stroke: #facc15;
+}
+
+.node-state-label {
+  fill: #27272a;
+  font-size: 9px;
   font-weight: 900;
   pointer-events: none;
 }

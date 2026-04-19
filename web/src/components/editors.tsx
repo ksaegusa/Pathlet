@@ -1,4 +1,4 @@
-import { ChangeEvent, Fragment, useState } from "react";
+import { ChangeEvent, useState } from "react";
 import {
   formatBandwidth,
   graphGroups,
@@ -15,6 +15,7 @@ import {
   routeEntriesFromGraph,
 } from "../graphModel";
 import { reachabilityScopeLabel, routeStatusLabel, testResultLabel } from "../formatters";
+import { causeCodeLabel, causeTone, diagnoseTrafficTest, endpointNameForIp, evaluationTone, factLabel, factTone, shortInterfaceLabel, trafficTestTitle } from "../diagnosis";
 import type {
   GraphModel,
   LinkModel,
@@ -954,6 +955,7 @@ export function RoutingPanel({
   const [nodeFilter, setNodeFilter] = useState("");
   const [newRouteNodeId, setNewRouteNodeId] = useState(graph.nodes[0]?.id ?? "");
   const filteredRoutes = routes.filter((route) => nodeFilter ? route.node_id === nodeFilter : true);
+  const visibleNodes = graph.nodes.filter((node) => nodeFilter ? node.id === nodeFilter : filteredRoutes.some((route) => route.node_id === node.id));
   return (
     <div className="grid gap-4 p-4">
       <div className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-zinc-200 bg-zinc-50 p-3">
@@ -981,76 +983,74 @@ export function RoutingPanel({
         </div>
       </div>
       {filteredRoutes.length ? (
-        <div className="overflow-x-auto rounded-lg border border-zinc-200 bg-white">
-          <table className="w-full min-w-[1500px] text-left text-xs">
-            <thead className="border-b border-zinc-200 bg-zinc-100 text-zinc-500">
-              <tr>
-                <th className="px-3 py-2 font-semibold">active</th>
-                <th className="px-3 py-2 font-semibold">id</th>
-                <th className="px-3 py-2 font-semibold">node</th>
-                <th className="px-3 py-2 font-semibold">destination</th>
-                <th className="px-3 py-2 font-semibold">next-hop</th>
-                <th className="px-3 py-2 font-semibold">egress</th>
-                <th className="px-3 py-2 font-semibold">metric</th>
-                <th className="px-3 py-2 font-semibold">AD</th>
-                <th className="px-3 py-2 font-semibold">VRF</th>
-                <th className="px-3 py-2 font-semibold">VLAN</th>
-                <th className="whitespace-nowrap px-3 py-2 font-semibold">操作</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-zinc-100">
-              {filteredRoutes.map((route) => (
-                <tr key={route.id} className="align-top">
-                  <td className="px-3 py-2">
-                    <input
-                      checked={route.active}
-                      type="checkbox"
-                      onChange={(event) => onUpdateRoute(route.id, { active: event.target.checked })}
-                    />
-                  </td>
-                  <td className="px-3 py-2 whitespace-nowrap font-mono text-zinc-700">{route.id}</td>
-                  <td className="px-3 py-2">
-                    <select className={inputClass} value={route.node_id} onChange={(event) => onUpdateRoute(route.id, { node_id: event.target.value })}>
-                      {graph.nodes.map((node) => (
-                        <option key={node.id} value={node.id}>{node.id}</option>
-                      ))}
-                    </select>
-                  </td>
-                  <td className="px-3 py-2">
-                    <input className={inputClass} value={route.destination} onChange={(event) => onUpdateRoute(route.id, { destination: event.target.value })} />
-                  </td>
-                  <td className="px-3 py-2">
-                    <input className={inputClass} value={route.next_hop ?? ""} onChange={(event) => onUpdateRoute(route.id, { next_hop: event.target.value })} />
-                  </td>
-                  <td className="px-3 py-2">
-                    <select className={inputClass} value={route.egress_interface ?? ""} onChange={(event) => onUpdateRoute(route.id, { egress_interface: event.target.value })}>
-                      <option value="">未指定</option>
-                      {graph.interfaces
-                        .filter((interfaceItem) => interfaceItem.node_id === route.node_id)
-                        .map((interfaceItem) => (
-                          <option key={interfaceItem.id} value={interfaceItem.id}>{interfaceLabel(graph, interfaceItem.id)}</option>
-                        ))}
-                    </select>
-                  </td>
-                  <td className="px-3 py-2">
-                    <input className={inputClass} min="0" type="number" value={route.metric} onChange={(event) => onUpdateRoute(route.id, { metric: Math.max(0, Number(event.target.value) || 0) })} />
-                  </td>
-                  <td className="px-3 py-2">
-                    <input className={inputClass} min="0" type="number" value={route.administrative_distance ?? ""} onChange={(event) => onUpdateRoute(route.id, { administrative_distance: optionalNumber(event.target.value) })} />
-                  </td>
-                  <td className="px-3 py-2">
-                    <input className={inputClass} value={route.vrf_id ?? ""} onChange={(event) => onUpdateRoute(route.id, { vrf_id: event.target.value })} />
-                  </td>
-                  <td className="px-3 py-2">
-                    <input className={inputClass} min="1" max="4094" type="number" value={route.vlan_id ?? ""} onChange={(event) => onUpdateRoute(route.id, { vlan_id: optionalNumber(event.target.value) })} />
-                  </td>
-                  <td className="whitespace-nowrap px-3 py-2">
-                    <button className={cn(buttonClass("danger"), "whitespace-nowrap")} type="button" onClick={() => onDeleteRoute(route.id)}>削除</button>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+        <div className="grid gap-3">
+          {visibleNodes.map((node) => {
+            const nodeRoutes = filteredRoutes.filter((route) => route.node_id === node.id);
+            if (!nodeRoutes.length) {
+              return null;
+            }
+            return (
+              <div className="rounded-lg border border-zinc-200 bg-white p-3" key={node.id}>
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <div>
+                    <h4 className="text-sm font-semibold text-zinc-950">{node.id} のルーティング</h4>
+                    <p className="mt-1 text-xs text-zinc-500">{nodeRoutes.filter((route) => route.active).length} active / {nodeRoutes.length} routes</p>
+                  </div>
+                  <button className={buttonClass("secondary")} type="button" onClick={() => onAddRoute(node.id)}>このノードに追加</button>
+                </div>
+                <div className="mt-3 grid gap-2">
+                  {nodeRoutes.map((route) => (
+                    <div className={cn("grid gap-3 rounded-md border p-3", route.active ? "border-zinc-200 bg-zinc-50" : "border-zinc-200 bg-zinc-100 opacity-70")} key={route.id}>
+                      <div className="flex flex-wrap items-center justify-between gap-2">
+                        <div className="min-w-0">
+                          <div className="break-words font-mono text-sm font-semibold text-zinc-900">
+                            {route.node_id} {"->"} {route.destination} via {route.next_hop || "direct"}
+                          </div>
+                          <div className="mt-1 text-xs text-zinc-500">
+                            out {shortInterfaceLabel(route.egress_interface)} / metric {route.metric}
+                          </div>
+                        </div>
+                        <div className="flex flex-wrap items-center gap-2">
+                          <Badge tone={route.active ? "success" : "muted"}>{route.active ? "active" : "inactive"}</Badge>
+                          <button className={cn(buttonClass("danger"), "whitespace-nowrap")} type="button" onClick={() => onDeleteRoute(route.id)}>削除</button>
+                        </div>
+                      </div>
+                      <div className="grid gap-2 md:grid-cols-4">
+                        <Field label="destination"><input className={inputClass} value={route.destination} onChange={(event) => onUpdateRoute(route.id, { destination: event.target.value })} /></Field>
+                        <Field label="next-hop"><input className={inputClass} value={route.next_hop ?? ""} onChange={(event) => onUpdateRoute(route.id, { next_hop: event.target.value })} /></Field>
+                        <Field label="out">
+                          <select className={inputClass} value={route.egress_interface ?? ""} onChange={(event) => onUpdateRoute(route.id, { egress_interface: event.target.value })}>
+                            <option value="">未指定</option>
+                            {graph.interfaces
+                              .filter((interfaceItem) => interfaceItem.node_id === route.node_id)
+                              .map((interfaceItem) => (
+                                <option key={interfaceItem.id} value={interfaceItem.id}>{shortInterfaceLabel(interfaceItem.id)}</option>
+                              ))}
+                          </select>
+                        </Field>
+                        <Field label="active">
+                          <select className={inputClass} value={route.active ? "active" : "inactive"} onChange={(event) => onUpdateRoute(route.id, { active: event.target.value === "active" })}>
+                            <option value="active">active</option>
+                            <option value="inactive">inactive</option>
+                          </select>
+                        </Field>
+                      </div>
+                      <details className="rounded-md border border-zinc-200 bg-white p-2">
+                        <summary className="cursor-pointer text-xs font-semibold text-zinc-600">詳細</summary>
+                        <div className="mt-2 grid gap-2 md:grid-cols-5">
+                          <Field label="id"><input className={inputClass} value={route.id} readOnly /></Field>
+                          <Field label="metric"><input className={inputClass} min="0" type="number" value={route.metric} onChange={(event) => onUpdateRoute(route.id, { metric: Math.max(0, Number(event.target.value) || 0) })} /></Field>
+                          <Field label="AD"><input className={inputClass} min="0" type="number" value={route.administrative_distance ?? ""} onChange={(event) => onUpdateRoute(route.id, { administrative_distance: optionalNumber(event.target.value) })} /></Field>
+                          <Field label="VRF"><input className={inputClass} value={route.vrf_id ?? ""} onChange={(event) => onUpdateRoute(route.id, { vrf_id: event.target.value })} /></Field>
+                          <Field label="VLAN"><input className={inputClass} min="1" max="4094" type="number" value={route.vlan_id ?? ""} onChange={(event) => onUpdateRoute(route.id, { vlan_id: optionalNumber(event.target.value) })} /></Field>
+                        </div>
+                      </details>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            );
+          })}
         </div>
       ) : (
         <EmptyMessage>表示対象のルートはありません。</EmptyMessage>
@@ -1075,6 +1075,7 @@ export function PolicyPanel({
   const [nodeFilter, setNodeFilter] = useState("");
   const [newPolicyNodeId, setNewPolicyNodeId] = useState(networkDevices[0]?.id ?? "");
   const filteredPolicies = policies.filter((policy) => nodeFilter ? policy.node_id === nodeFilter : true);
+  const visibleNodes = networkDevices.filter((node) => nodeFilter ? node.id === nodeFilter : filteredPolicies.some((policy) => policy.node_id === node.id));
   return (
     <div className="grid gap-4 p-4">
       <div className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-zinc-200 bg-zinc-50 p-3">
@@ -1102,99 +1103,93 @@ export function PolicyPanel({
         </div>
       </div>
       {filteredPolicies.length ? (
-        <div className="overflow-x-auto rounded-lg border border-zinc-200 bg-white">
-          <table className="w-full min-w-[1560px] text-left text-xs">
-            <thead className="border-b border-zinc-200 bg-zinc-100 text-zinc-500">
-              <tr>
-                <th className="px-3 py-2 font-semibold">active</th>
-                <th className="px-3 py-2 font-semibold">id</th>
-                <th className="px-3 py-2 font-semibold">node</th>
-                <th className="px-3 py-2 font-semibold">interface</th>
-                <th className="px-3 py-2 font-semibold">name</th>
-                <th className="px-3 py-2 font-semibold">direction</th>
-                <th className="px-3 py-2 font-semibold">action</th>
-                <th className="px-3 py-2 font-semibold">protocol</th>
-                <th className="px-3 py-2 font-semibold">port</th>
-                <th className="px-3 py-2 font-semibold">source</th>
-                <th className="px-3 py-2 font-semibold">destination</th>
-                <th className="whitespace-nowrap px-3 py-2 font-semibold">操作</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-zinc-100">
-              {filteredPolicies.map((policy) => (
-                <tr key={policy.id} className="align-top">
-                  <td className="px-3 py-2">
-                    <input checked={policy.active} type="checkbox" onChange={(event) => onUpdatePolicy(policy.id, { active: event.target.checked })} />
-                  </td>
-                  <td className="px-3 py-2 whitespace-nowrap font-mono text-zinc-700">{policy.id}</td>
-                  <td className="px-3 py-2">
-                    <select className={inputClass} value={policy.node_id} onChange={(event) => onUpdatePolicy(policy.id, { node_id: event.target.value, interface_id: undefined })}>
-                      {networkDevices.map((node) => (
-                        <option key={node.id} value={node.id}>{node.id}</option>
-                      ))}
-                    </select>
-                  </td>
-                  <td className="px-3 py-2">
-                    <select className={inputClass} value={policy.interface_id ?? ""} onChange={(event) => onUpdatePolicy(policy.id, { interface_id: event.target.value || undefined })}>
-                      <option value="">node-wide</option>
-                      {graph.interfaces
-                        .filter((interfaceItem) => interfaceItem.node_id === policy.node_id)
-                        .map((interfaceItem) => (
-                          <option key={interfaceItem.id} value={interfaceItem.id}>{interfaceLabel(graph, interfaceItem.id)}</option>
-                        ))}
-                    </select>
-                  </td>
-                  <td className="px-3 py-2">
-                    <input className={inputClass} value={policy.name ?? ""} onChange={(event) => onUpdatePolicy(policy.id, { name: event.target.value })} />
-                  </td>
-                  <td className="px-3 py-2">
-                    <select className={inputClass} value={policy.direction} onChange={(event) => onUpdatePolicy(policy.id, { direction: event.target.value as PolicyRuleModel["direction"] })}>
-                      <option value="ingress">ingress</option>
-                      <option value="egress">egress</option>
-                    </select>
-                  </td>
-                  <td className="px-3 py-2">
-                    <select className={inputClass} value={policy.action} onChange={(event) => onUpdatePolicy(policy.id, { action: event.target.value as PolicyRuleModel["action"] })}>
-                      <option value="permit">permit</option>
-                      <option value="deny">deny</option>
-                    </select>
-                  </td>
-                  <td className="px-3 py-2">
-                    <select
-                      className={inputClass}
-                      value={policy.protocol}
-                      onChange={(event) => onUpdatePolicy(policy.id, { protocol: event.target.value as PolicyProtocol, port: event.target.value === "tcp" || event.target.value === "udp" ? policy.port : undefined })}
-                    >
-                      <option value="any">any</option>
-                      <option value="icmp">ICMP</option>
-                      <option value="tcp">TCP</option>
-                      <option value="udp">UDP</option>
-                    </select>
-                  </td>
-                  <td className="px-3 py-2">
-                    <input
-                      className={inputClass}
-                      disabled={policy.protocol === "any" || policy.protocol === "icmp"}
-                      min="1"
-                      max="65535"
-                      type="number"
-                      value={policy.protocol === "any" || policy.protocol === "icmp" ? "" : policy.port ?? ""}
-                      onChange={(event) => onUpdatePolicy(policy.id, { port: optionalNumber(event.target.value) })}
-                    />
-                  </td>
-                  <td className="px-3 py-2">
-                    <input className={inputClass} value={policy.source} onChange={(event) => onUpdatePolicy(policy.id, { source: event.target.value })} />
-                  </td>
-                  <td className="px-3 py-2">
-                    <input className={inputClass} value={policy.destination} onChange={(event) => onUpdatePolicy(policy.id, { destination: event.target.value })} />
-                  </td>
-                  <td className="whitespace-nowrap px-3 py-2">
-                    <button className={cn(buttonClass("danger"), "whitespace-nowrap")} type="button" onClick={() => onDeletePolicy(policy.id)}>削除</button>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+        <div className="grid gap-3">
+          {visibleNodes.map((node) => {
+            const nodePolicies = filteredPolicies.filter((policy) => policy.node_id === node.id);
+            if (!nodePolicies.length) {
+              return null;
+            }
+            return (
+              <div className="rounded-lg border border-zinc-200 bg-white p-3" key={node.id}>
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <div>
+                    <h4 className="text-sm font-semibold text-zinc-950">{node.id} のPolicy</h4>
+                    <p className="mt-1 text-xs text-zinc-500">{nodePolicies.filter((policy) => policy.active).length} active / {nodePolicies.length} rules</p>
+                  </div>
+                  <button className={buttonClass("secondary")} type="button" onClick={() => onAddPolicy(node.id)}>このノードに追加</button>
+                </div>
+                <div className="mt-3 grid gap-2">
+                  {nodePolicies.map((policy) => (
+                    <div className={cn("grid gap-3 rounded-md border p-3", policy.action === "deny" ? "border-red-200 bg-red-50/50" : "border-zinc-200 bg-zinc-50", !policy.active && "opacity-65")} key={policy.id}>
+                      <div className="flex flex-wrap items-center justify-between gap-2">
+                        <div className="min-w-0">
+                          <div className="break-words font-mono text-sm font-semibold text-zinc-900">
+                            {policy.source} {"->"} {policy.destination} | {policy.protocol.toUpperCase()}{policy.port ? `/${policy.port}` : ""} | {policy.action}
+                          </div>
+                          <div className="mt-1 text-xs text-zinc-500">
+                            {policy.direction} / {shortInterfaceLabel(policy.interface_id)} / {policy.name ?? policy.ace_name}
+                          </div>
+                        </div>
+                        <div className="flex flex-wrap items-center gap-2">
+                          <Badge tone={policy.action === "deny" ? "danger" : "success"}>{policy.action}</Badge>
+                          <Badge tone={policy.active ? "success" : "muted"}>{policy.active ? "active" : "inactive"}</Badge>
+                          <button className={cn(buttonClass("danger"), "whitespace-nowrap")} type="button" onClick={() => onDeletePolicy(policy.id)}>削除</button>
+                        </div>
+                      </div>
+                      <div className="grid gap-2 md:grid-cols-5">
+                        <Field label="source"><input className={inputClass} value={policy.source} onChange={(event) => onUpdatePolicy(policy.id, { source: event.target.value })} /></Field>
+                        <Field label="destination"><input className={inputClass} value={policy.destination} onChange={(event) => onUpdatePolicy(policy.id, { destination: event.target.value })} /></Field>
+                        <Field label="protocol">
+                          <select className={inputClass} value={policy.protocol} onChange={(event) => onUpdatePolicy(policy.id, { protocol: event.target.value as PolicyProtocol, port: event.target.value === "tcp" || event.target.value === "udp" ? policy.port : undefined })}>
+                            <option value="any">any</option>
+                            <option value="icmp">ICMP</option>
+                            <option value="tcp">TCP</option>
+                            <option value="udp">UDP</option>
+                          </select>
+                        </Field>
+                        <Field label="port"><input className={inputClass} disabled={policy.protocol === "any" || policy.protocol === "icmp"} min="1" max="65535" type="number" value={policy.protocol === "any" || policy.protocol === "icmp" ? "" : policy.port ?? ""} onChange={(event) => onUpdatePolicy(policy.id, { port: optionalNumber(event.target.value) })} /></Field>
+                        <Field label="action">
+                          <select className={inputClass} value={policy.action} onChange={(event) => onUpdatePolicy(policy.id, { action: event.target.value as PolicyRuleModel["action"] })}>
+                            <option value="permit">permit</option>
+                            <option value="deny">deny</option>
+                          </select>
+                        </Field>
+                      </div>
+                      <details className="rounded-md border border-zinc-200 bg-white p-2">
+                        <summary className="cursor-pointer text-xs font-semibold text-zinc-600">詳細</summary>
+                        <div className="mt-2 grid gap-2 md:grid-cols-5">
+                          <Field label="name"><input className={inputClass} value={policy.name ?? ""} onChange={(event) => onUpdatePolicy(policy.id, { name: event.target.value })} /></Field>
+                          <Field label="direction">
+                            <select className={inputClass} value={policy.direction} onChange={(event) => onUpdatePolicy(policy.id, { direction: event.target.value as PolicyRuleModel["direction"] })}>
+                              <option value="ingress">ingress</option>
+                              <option value="egress">egress</option>
+                            </select>
+                          </Field>
+                          <Field label="interface">
+                            <select className={inputClass} value={policy.interface_id ?? ""} onChange={(event) => onUpdatePolicy(policy.id, { interface_id: event.target.value || undefined })}>
+                              <option value="">node-wide</option>
+                              {graph.interfaces
+                                .filter((interfaceItem) => interfaceItem.node_id === policy.node_id)
+                                .map((interfaceItem) => (
+                                  <option key={interfaceItem.id} value={interfaceItem.id}>{shortInterfaceLabel(interfaceItem.id)}</option>
+                                ))}
+                            </select>
+                          </Field>
+                          <Field label="active">
+                            <select className={inputClass} value={policy.active ? "active" : "inactive"} onChange={(event) => onUpdatePolicy(policy.id, { active: event.target.value === "active" })}>
+                              <option value="active">active</option>
+                              <option value="inactive">inactive</option>
+                            </select>
+                          </Field>
+                          <Field label="id"><input className={inputClass} value={policy.id} readOnly /></Field>
+                        </div>
+                      </details>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            );
+          })}
         </div>
       ) : (
         <EmptyMessage>表示対象のPolicyはありません。</EmptyMessage>
@@ -1219,6 +1214,7 @@ export function NatPanel({
   const [nodeFilter, setNodeFilter] = useState("");
   const [newRuleNodeId, setNewRuleNodeId] = useState(networkDevices[0]?.id ?? "");
   const filteredRules = rules.filter((rule) => nodeFilter ? rule.node_id === nodeFilter : true);
+  const visibleNodes = networkDevices.filter((node) => nodeFilter ? node.id === nodeFilter : filteredRules.some((rule) => rule.node_id === node.id));
 
   return (
     <div className="grid gap-4 p-4">
@@ -1247,95 +1243,92 @@ export function NatPanel({
         </div>
       </div>
       {filteredRules.length ? (
-        <div className="overflow-x-auto rounded-lg border border-zinc-200 bg-white">
-          <table className="w-full min-w-[1560px] text-left text-xs">
-            <thead className="border-b border-zinc-200 bg-zinc-100 text-zinc-500">
-              <tr>
-                <th className="px-3 py-2 font-semibold">active</th>
-                <th className="px-3 py-2 font-semibold">id</th>
-                <th className="px-3 py-2 font-semibold">node</th>
-                <th className="px-3 py-2 font-semibold">interface</th>
-                <th className="px-3 py-2 font-semibold">direction</th>
-                <th className="px-3 py-2 font-semibold">type</th>
-                <th className="px-3 py-2 font-semibold">protocol</th>
-                <th className="px-3 py-2 font-semibold">port</th>
-                <th className="px-3 py-2 font-semibold">original</th>
-                <th className="px-3 py-2 font-semibold">translated</th>
-                <th className="whitespace-nowrap px-3 py-2 font-semibold">操作</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-zinc-100">
-              {filteredRules.map((rule) => (
-                <tr key={rule.id} className="align-top">
-                  <td className="px-3 py-2">
-                    <input checked={rule.active} type="checkbox" onChange={(event) => onUpdateNatRule(rule.id, { active: event.target.checked })} />
-                  </td>
-                  <td className="px-3 py-2 whitespace-nowrap font-mono text-zinc-700">{rule.id}</td>
-                  <td className="px-3 py-2">
-                    <select className={inputClass} value={rule.node_id} onChange={(event) => onUpdateNatRule(rule.id, { node_id: event.target.value, interface_id: undefined })}>
-                      {networkDevices.map((node) => (
-                        <option key={node.id} value={node.id}>{node.id}</option>
-                      ))}
-                    </select>
-                  </td>
-                  <td className="px-3 py-2">
-                    <select className={inputClass} value={rule.interface_id ?? ""} onChange={(event) => onUpdateNatRule(rule.id, { interface_id: event.target.value || undefined })}>
-                      <option value="">node-wide</option>
-                      {graph.interfaces
-                        .filter((interfaceItem) => interfaceItem.node_id === rule.node_id)
-                        .map((interfaceItem) => (
-                          <option key={interfaceItem.id} value={interfaceItem.id}>{interfaceLabel(graph, interfaceItem.id)}</option>
-                        ))}
-                    </select>
-                  </td>
-                  <td className="px-3 py-2">
-                    <select className={inputClass} value={rule.direction} onChange={(event) => onUpdateNatRule(rule.id, { direction: event.target.value as NatRuleModel["direction"] })}>
-                      <option value="ingress">ingress</option>
-                      <option value="egress">egress</option>
-                    </select>
-                  </td>
-                  <td className="px-3 py-2">
-                    <select className={inputClass} value={rule.nat_type} onChange={(event) => onUpdateNatRule(rule.id, { nat_type: event.target.value as NatRuleModel["nat_type"] })}>
-                      <option value="source">source</option>
-                      <option value="destination">destination</option>
-                    </select>
-                  </td>
-                  <td className="px-3 py-2">
-                    <select
-                      className={inputClass}
-                      value={rule.protocol ?? "any"}
-                      onChange={(event) => onUpdateNatRule(rule.id, { protocol: event.target.value as PolicyProtocol, port: event.target.value === "tcp" || event.target.value === "udp" ? rule.port : undefined })}
-                    >
-                      <option value="any">any</option>
-                      <option value="icmp">ICMP</option>
-                      <option value="tcp">TCP</option>
-                      <option value="udp">UDP</option>
-                    </select>
-                  </td>
-                  <td className="px-3 py-2">
-                    <input
-                      className={inputClass}
-                      disabled={rule.protocol === "any" || rule.protocol === "icmp" || !rule.protocol}
-                      min="1"
-                      max="65535"
-                      type="number"
-                      value={rule.protocol === "tcp" || rule.protocol === "udp" ? rule.port ?? "" : ""}
-                      onChange={(event) => onUpdateNatRule(rule.id, { port: optionalNumber(event.target.value) })}
-                    />
-                  </td>
-                  <td className="px-3 py-2">
-                    <input className={inputClass} value={rule.original} onChange={(event) => onUpdateNatRule(rule.id, { original: event.target.value })} />
-                  </td>
-                  <td className="px-3 py-2">
-                    <input className={inputClass} value={rule.translated} onChange={(event) => onUpdateNatRule(rule.id, { translated: event.target.value })} />
-                  </td>
-                  <td className="whitespace-nowrap px-3 py-2">
-                    <button className={cn(buttonClass("danger"), "whitespace-nowrap")} type="button" onClick={() => onDeleteNatRule(rule.id)}>削除</button>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+        <div className="grid gap-3">
+          {visibleNodes.map((node) => {
+            const nodeRules = filteredRules.filter((rule) => rule.node_id === node.id);
+            if (!nodeRules.length) {
+              return null;
+            }
+            return (
+              <div className="rounded-lg border border-zinc-200 bg-white p-3" key={node.id}>
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <div>
+                    <h4 className="text-sm font-semibold text-zinc-950">{node.id} のNAT</h4>
+                    <p className="mt-1 text-xs text-zinc-500">{nodeRules.filter((rule) => rule.active).length} active / {nodeRules.length} rules</p>
+                  </div>
+                  <button className={buttonClass("secondary")} type="button" onClick={() => onAddNatRule(node.id)}>このノードに追加</button>
+                </div>
+                <div className="mt-3 grid gap-2">
+                  {nodeRules.map((rule) => (
+                    <div className={cn("grid gap-3 rounded-md border border-zinc-200 bg-zinc-50 p-3", !rule.active && "opacity-65")} key={rule.id}>
+                      <div className="flex flex-wrap items-center justify-between gap-2">
+                        <div className="min-w-0">
+                          <div className="break-words font-mono text-sm font-semibold text-zinc-900">
+                            {rule.original} {"->"} {rule.translated} | {rule.nat_type} NAT
+                          </div>
+                          <div className="mt-1 text-xs text-zinc-500">
+                            {rule.direction} / {shortInterfaceLabel(rule.interface_id)} / {(rule.protocol ?? "any").toUpperCase()}{rule.port ? `/${rule.port}` : ""}
+                          </div>
+                        </div>
+                        <div className="flex flex-wrap items-center gap-2">
+                          <Badge>{rule.nat_type}</Badge>
+                          <Badge tone={rule.active ? "success" : "muted"}>{rule.active ? "active" : "inactive"}</Badge>
+                          <button className={cn(buttonClass("danger"), "whitespace-nowrap")} type="button" onClick={() => onDeleteNatRule(rule.id)}>削除</button>
+                        </div>
+                      </div>
+                      <div className="grid gap-2 md:grid-cols-4">
+                        <Field label="original"><input className={inputClass} value={rule.original} onChange={(event) => onUpdateNatRule(rule.id, { original: event.target.value })} /></Field>
+                        <Field label="translated"><input className={inputClass} value={rule.translated} onChange={(event) => onUpdateNatRule(rule.id, { translated: event.target.value })} /></Field>
+                        <Field label="type">
+                          <select className={inputClass} value={rule.nat_type} onChange={(event) => onUpdateNatRule(rule.id, { nat_type: event.target.value as NatRuleModel["nat_type"] })}>
+                            <option value="source">source</option>
+                            <option value="destination">destination</option>
+                          </select>
+                        </Field>
+                        <Field label="protocol">
+                          <select className={inputClass} value={rule.protocol ?? "any"} onChange={(event) => onUpdateNatRule(rule.id, { protocol: event.target.value as PolicyProtocol, port: event.target.value === "tcp" || event.target.value === "udp" ? rule.port : undefined })}>
+                            <option value="any">any</option>
+                            <option value="icmp">ICMP</option>
+                            <option value="tcp">TCP</option>
+                            <option value="udp">UDP</option>
+                          </select>
+                        </Field>
+                      </div>
+                      <details className="rounded-md border border-zinc-200 bg-white p-2">
+                        <summary className="cursor-pointer text-xs font-semibold text-zinc-600">詳細</summary>
+                        <div className="mt-2 grid gap-2 md:grid-cols-5">
+                          <Field label="direction">
+                            <select className={inputClass} value={rule.direction} onChange={(event) => onUpdateNatRule(rule.id, { direction: event.target.value as NatRuleModel["direction"] })}>
+                              <option value="ingress">ingress</option>
+                              <option value="egress">egress</option>
+                            </select>
+                          </Field>
+                          <Field label="interface">
+                            <select className={inputClass} value={rule.interface_id ?? ""} onChange={(event) => onUpdateNatRule(rule.id, { interface_id: event.target.value || undefined })}>
+                              <option value="">node-wide</option>
+                              {graph.interfaces
+                                .filter((interfaceItem) => interfaceItem.node_id === rule.node_id)
+                                .map((interfaceItem) => (
+                                  <option key={interfaceItem.id} value={interfaceItem.id}>{shortInterfaceLabel(interfaceItem.id)}</option>
+                                ))}
+                            </select>
+                          </Field>
+                          <Field label="port"><input className={inputClass} disabled={rule.protocol === "any" || rule.protocol === "icmp" || !rule.protocol} min="1" max="65535" type="number" value={rule.protocol === "tcp" || rule.protocol === "udp" ? rule.port ?? "" : ""} onChange={(event) => onUpdateNatRule(rule.id, { port: optionalNumber(event.target.value) })} /></Field>
+                          <Field label="active">
+                            <select className={inputClass} value={rule.active ? "active" : "inactive"} onChange={(event) => onUpdateNatRule(rule.id, { active: event.target.value === "active" })}>
+                              <option value="active">active</option>
+                              <option value="inactive">inactive</option>
+                            </select>
+                          </Field>
+                          <Field label="id"><input className={inputClass} value={rule.id} readOnly /></Field>
+                        </div>
+                      </details>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            );
+          })}
         </div>
       ) : (
         <EmptyMessage>表示対象のNATルールはありません。</EmptyMessage>
@@ -1348,10 +1341,12 @@ export function TrafficTestsPanel({
   graph,
   tests,
   results,
+  selectedTestId,
   onImport,
   onExport,
   onExportReport,
   onAdd,
+  onSelect,
   onUpdate,
   onDelete,
   onRun,
@@ -1360,10 +1355,12 @@ export function TrafficTestsPanel({
   graph: GraphModel;
   tests: TrafficTestRecordModel[];
   results: Record<string, TrafficTestResultModel>;
+  selectedTestId: string | null;
   onImport: (event: ChangeEvent<HTMLInputElement>) => void;
   onExport: () => void;
   onExportReport: () => void;
   onAdd: () => void;
+  onSelect: (testId: string) => void;
   onUpdate: (testId: string, patch: Partial<TrafficTestRecordModel>) => void;
   onDelete: (testId: string) => void;
   onRun: (testId: string) => void;
@@ -1432,119 +1429,122 @@ export function TrafficTestsPanel({
       </div>
 
       {tests.length ? (
-        <div className="overflow-x-auto rounded-lg border border-zinc-200 bg-white">
-          <table className="w-full min-w-[1260px] text-left text-xs">
-            <thead className="border-b border-zinc-200 bg-zinc-100 text-zinc-500">
-              <tr>
-                <th className="px-3 py-2 font-semibold">enabled</th>
-                <th className="px-3 py-2 font-semibold">試験名</th>
-                <th className="px-3 py-2 font-semibold">source IP</th>
-                <th className="px-3 py-2 font-semibold">destination IP</th>
-                <th className="px-3 py-2 font-semibold">protocol</th>
-                <th className="px-3 py-2 font-semibold">port</th>
-                <th className="px-3 py-2 font-semibold">判定範囲</th>
-                <th className="px-3 py-2 font-semibold">期待到達性</th>
-                <th className="px-3 py-2 font-semibold">結果</th>
-                <th className="whitespace-nowrap px-3 py-2 font-semibold">操作</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-zinc-100">
-              {tests.map((test) => {
-                const result = results[test.id];
-                const expanded = expandedTestIds.has(test.id);
-                return (
-                  <Fragment key={test.id}>
-                    <tr className="align-top">
-                      <td className="px-3 py-2">
-                        <input
-                          checked={test.enabled}
-                          type="checkbox"
-                          onChange={(event) => onUpdate(test.id, { enabled: event.target.checked })}
-                        />
-                      </td>
-                      <td className="px-3 py-2">
-                        <select
-                          className={inputClass}
-                          value={test.expectations.scope ?? "round_trip"}
-                          onChange={(event) => onUpdate(test.id, { expectations: { ...test.expectations, scope: event.target.value as ReachabilityScope } })}
-                        >
-                          <option value="round_trip">往復</option>
-                          <option value="forward_only">片道</option>
-                        </select>
-                      </td>
-                      <td className="px-3 py-2">
-                        <input className={inputClass} placeholder={test.id} value={test.name ?? ""} onChange={(event) => onUpdate(test.id, { name: event.target.value })} />
-                      </td>
-                      <td className="px-3 py-2">
-                        <input className={inputClass} value={test.source} onChange={(event) => onUpdate(test.id, { source: event.target.value })} />
-                      </td>
-                      <td className="px-3 py-2">
-                        <input className={inputClass} value={test.destination} onChange={(event) => onUpdate(test.id, { destination: event.target.value })} />
-                      </td>
-                      <td className="px-3 py-2">
-                        <select className={inputClass} value={test.protocol} onChange={(event) => onUpdate(test.id, { protocol: event.target.value as TrafficProtocol, port: event.target.value === "icmp" ? undefined : test.port })}>
-                          <option value="icmp">ICMP</option>
-                          <option value="tcp">TCP</option>
-                          <option value="udp">UDP</option>
-                        </select>
-                      </td>
-                      <td className="px-3 py-2">
-                        <input
-                          className={inputClass}
-                          disabled={test.protocol === "icmp"}
-                          min="1"
-                          max="65535"
-                          type="number"
-                          value={test.protocol === "icmp" ? "" : test.port ?? ""}
-                          onChange={(event) => onUpdate(test.id, { port: optionalNumber(event.target.value) })}
-                        />
-                      </td>
-                      <td className="px-3 py-2">
-                        <select
-                          className={inputClass}
-                          value={test.expectations.reachable ? "reachable" : "unreachable"}
-                          onChange={(event) => onUpdate(test.id, { expectations: { ...test.expectations, reachable: event.target.value === "reachable" } })}
-                        >
-                          <option value="reachable">到達可能</option>
-                          <option value="unreachable">到達不可</option>
-                        </select>
-                      </td>
-                      <td className="px-3 py-2">
-                        <div className="grid min-w-[220px] gap-1">
-                          <Badge tone={resultTone(result)}>{testResultLabel(result?.status)}</Badge>
-                          <span className="break-words text-zinc-500">{result?.message ?? "まだ実行していません"}</span>
-                        </div>
-                      </td>
-                      <td className="whitespace-nowrap px-3 py-2">
-                        <div className="flex flex-wrap gap-2">
-                          <button className={cn(buttonClass("secondary"), "whitespace-nowrap")} type="button" onClick={() => onRun(test.id)}>
-                            実行
-                          </button>
-                          <button className={cn(buttonClass("secondary"), "whitespace-nowrap")} type="button" onClick={() => toggleTestDetails(test.id)} aria-expanded={expanded}>
-                            {expanded ? "詳細を閉じる" : "詳細"}
-                          </button>
-                          <button className={cn(buttonClass("danger"), "whitespace-nowrap")} type="button" onClick={() => onDelete(test.id)}>
-                            削除
-                          </button>
-                        </div>
-                      </td>
-                    </tr>
-                    {expanded ? (
-                      <tr>
-                        <td className="bg-zinc-50 px-3 py-3" colSpan={10}>
-                          <TrafficTestDetails test={test} result={result} />
-                        </td>
-                      </tr>
-                    ) : null}
-                  </Fragment>
-                );
-              })}
-            </tbody>
-          </table>
+        <div className="grid gap-3">
+          {tests.map((test) => {
+            const result = results[test.id];
+            const expanded = expandedTestIds.has(test.id);
+            const diagnosis = diagnoseTrafficTest(result, test);
+            const protocol = test.port ? `${test.protocol.toUpperCase()}/${test.port}` : test.protocol.toUpperCase();
+            const selected = selectedTestId === test.id;
+            return (
+              <div className={cn(
+                "rounded-lg border bg-white p-3 transition",
+                selected && "ring-2 ring-teal-300",
+                result?.status === "pass" && "border-teal-200",
+                result?.status === "fail" && "border-red-200 bg-red-50/40",
+                result?.status === "error" && "border-red-200 bg-red-50/40",
+                !result && "border-zinc-200"
+              )} key={test.id}>
+                <div className="grid gap-3 lg:grid-cols-[minmax(0,1fr)_300px]">
+                  <div className="min-w-0">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <Badge tone={evaluationTone(diagnosis.evaluation.result)}>{diagnosis.evaluation.result}</Badge>
+                      <Badge tone={causeTone(diagnosis.cause.code, diagnosis.evaluation.result)}>{causeCodeLabel(diagnosis.cause.code)}</Badge>
+                      <Badge>{protocol}</Badge>
+                      <Badge tone={test.expectations.reachable ? "success" : "danger"}>期待 {test.expectations.reachable ? "到達可能" : "到達不可"}</Badge>
+                      <Badge tone="muted">{reachabilityScopeLabel(test.expectations.scope)}</Badge>
+                    </div>
+                    <div className="mt-2 break-words text-base font-semibold text-zinc-950">
+                      {trafficTestTitle(graph, test)}
+                    </div>
+                    <div className="mt-2 flex flex-wrap gap-2">
+                      <Badge tone={factTone(diagnosis.facts.e2e)}>E2E {factLabel(diagnosis.facts.e2e)}</Badge>
+                      <Badge tone={factTone(diagnosis.facts.forward)}>FWD {factLabel(diagnosis.facts.forward)}</Badge>
+                      <Badge tone={factTone(diagnosis.facts.reverse)}>REV {factLabel(diagnosis.facts.reverse)}</Badge>
+                    </div>
+                    <div className="mt-2 break-words font-mono text-xs text-zinc-500">{test.source} {"->"} {test.destination}</div>
+                    <div className="mt-2 text-sm font-medium text-zinc-700">{diagnosis.cause.message}</div>
+                  </div>
+                  <div className="flex flex-wrap items-start justify-end gap-2">
+                    <label className="inline-flex min-h-9 items-center gap-2 rounded-md border border-zinc-200 bg-white px-3 text-sm font-semibold text-zinc-700">
+                      <input checked={test.enabled} type="checkbox" onChange={(event) => onUpdate(test.id, { enabled: event.target.checked })} />
+                      enabled
+                    </label>
+                    <button className={cn(buttonClass(selected ? "success" : "secondary"), "whitespace-nowrap")} type="button" onClick={() => onSelect(test.id)}>
+                      {selected ? "表示中" : "トポロジ表示"}
+                    </button>
+                    <button className={cn(buttonClass("secondary"), "whitespace-nowrap")} type="button" onClick={() => onRun(test.id)}>実行</button>
+                    <button className={cn(buttonClass("secondary"), "whitespace-nowrap")} type="button" onClick={() => toggleTestDetails(test.id)} aria-expanded={expanded}>
+                      {expanded ? "閉じる" : "展開"}
+                    </button>
+                    <button className={cn(buttonClass("danger"), "whitespace-nowrap")} type="button" onClick={() => onDelete(test.id)}>削除</button>
+                  </div>
+                </div>
+                {expanded ? (
+                  <div className="mt-3 border-t border-zinc-200 pt-3">
+                    <TrafficTestEditor graph={graph} test={test} onUpdate={onUpdate} />
+                    <div className="mt-3">
+                      <TrafficTestDetails test={test} result={result} />
+                    </div>
+                  </div>
+                ) : null}
+              </div>
+            );
+          })}
         </div>
       ) : (
         <EmptyMessage>通信試験はありません。試験を追加するか、試験JSON/YAMLを読み込んでください。</EmptyMessage>
       )}
+    </div>
+  );
+}
+
+function TrafficTestEditor({
+  graph,
+  test,
+  onUpdate,
+}: {
+  graph: GraphModel;
+  test: TrafficTestRecordModel;
+  onUpdate: (testId: string, patch: Partial<TrafficTestRecordModel>) => void;
+}) {
+  return (
+    <div className="grid gap-3 rounded-md border border-zinc-200 bg-zinc-50 p-3">
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <div>
+          <h4 className="text-sm font-semibold text-zinc-950">試験条件</h4>
+          <p className="mt-1 text-xs text-zinc-500">{endpointNameForIp(graph, test.source)} から {endpointNameForIp(graph, test.destination)} への通信</p>
+        </div>
+        <Badge>{test.id}</Badge>
+      </div>
+      <div className="grid gap-2 md:grid-cols-4">
+        <Field label="id"><input className={inputClass} value={test.id} readOnly /></Field>
+        <Field label="name"><input className={inputClass} placeholder={test.id} value={test.name ?? ""} onChange={(event) => onUpdate(test.id, { name: event.target.value })} /></Field>
+        <Field label="source IP"><input className={inputClass} value={test.source} onChange={(event) => onUpdate(test.id, { source: event.target.value })} /></Field>
+        <Field label="destination IP"><input className={inputClass} value={test.destination} onChange={(event) => onUpdate(test.id, { destination: event.target.value })} /></Field>
+      </div>
+      <div className="grid gap-2 md:grid-cols-4">
+        <Field label="protocol">
+          <select className={inputClass} value={test.protocol} onChange={(event) => onUpdate(test.id, { protocol: event.target.value as TrafficProtocol, port: event.target.value === "icmp" ? undefined : test.port })}>
+            <option value="icmp">ICMP</option>
+            <option value="tcp">TCP</option>
+            <option value="udp">UDP</option>
+          </select>
+        </Field>
+        <Field label="port"><input className={inputClass} disabled={test.protocol === "icmp"} min="1" max="65535" type="number" value={test.protocol === "icmp" ? "" : test.port ?? ""} onChange={(event) => onUpdate(test.id, { port: optionalNumber(event.target.value) })} /></Field>
+        <Field label="判定範囲">
+          <select className={inputClass} value={test.expectations.scope ?? "round_trip"} onChange={(event) => onUpdate(test.id, { expectations: { ...test.expectations, scope: event.target.value as ReachabilityScope } })}>
+            <option value="round_trip">往復</option>
+            <option value="forward_only">片道</option>
+          </select>
+        </Field>
+        <Field label="期待">
+          <select className={inputClass} value={test.expectations.reachable ? "reachable" : "unreachable"} onChange={(event) => onUpdate(test.id, { expectations: { ...test.expectations, reachable: event.target.value === "reachable" } })}>
+            <option value="reachable">到達可能</option>
+            <option value="unreachable">到達不可</option>
+          </select>
+        </Field>
+      </div>
     </div>
   );
 }

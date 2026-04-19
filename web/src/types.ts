@@ -235,6 +235,15 @@ export type PipelineLeg = {
 
 export type TrafficProtocol = "icmp" | "tcp" | "udp";
 export type LayoutDirection = "lr" | "td";
+export type LayoutDensity = "normal" | "dense" | "crowded";
+export type TopologyLayoutModel = {
+  nodes: Map<string, { x: number; y: number }>;
+  groups?: Map<string, { x: number; y: number; width: number; height: number; label: string }>;
+  width: number;
+  height: number;
+  density: LayoutDensity;
+  engine: "fallback" | "elk";
+};
 export type RouteMode = "shortest_path" | "routing_table";
 export type RouteStatus = "reachable" | "unreachable" | "loop" | "no_route" | "blackhole" | "policy_denied";
 export type ReachabilityScope = "round_trip" | "forward_only";
