@@ -215,16 +215,31 @@ export type RouteResponse =
       matched_nat_rule_ids?: string[];
       translated_source?: string;
       translated_destination?: string;
+      forward?: PipelineLeg;
+      return_path?: PipelineLeg;
       loop_link_ids?: string[];
     }
   | { ok: false; error: { code: string; message: string } };
+
+export type PipelineLeg = {
+  path: string[];
+  status: RouteStatus;
+  matched_route_ids: string[];
+  matched_policy_ids: string[];
+  matched_nat_rule_ids: string[];
+  source_before?: string;
+  destination_before?: string;
+  source_after?: string;
+  destination_after?: string;
+};
 
 export type TrafficProtocol = "icmp" | "tcp" | "udp";
 export type LayoutDirection = "lr" | "td";
 export type RouteMode = "shortest_path" | "routing_table";
 export type RouteStatus = "reachable" | "unreachable" | "loop" | "no_route" | "blackhole" | "policy_denied";
+export type ReachabilityScope = "round_trip" | "forward_only";
 export type InterfaceDisplayMode = "compact" | "detail";
-export type ActiveModal = "link" | "links" | "graph" | "node" | "routing" | "policy" | "nat";
+export type ActiveModal = "link" | "links" | "graph" | "node";
 
 export type TrafficIntent = {
   source_node_id: string;
@@ -233,6 +248,7 @@ export type TrafficIntent = {
   port?: number;
   expectations: {
     reachable: boolean;
+    scope?: ReachabilityScope;
     via_node_id?: string;
     strict_path?: boolean;
     policy?: "permit" | "deny";
@@ -242,6 +258,32 @@ export type TrafficIntent = {
 export type RouteEdgeDirection = {
   from_interface: string;
   to_interface: string;
+};
+
+export type TrafficTestSuiteModel = {
+  version: 1;
+  tests: TrafficTestRecordModel[];
+};
+
+export type TrafficTestRecordModel = {
+  id: string;
+  name?: string;
+  enabled: boolean;
+  source: string;
+  destination: string;
+  protocol: TrafficProtocol;
+  port?: number;
+  expectations: {
+    reachable: boolean;
+    scope?: ReachabilityScope;
+  };
+};
+
+export type TrafficTestResultModel = {
+  test_id: string;
+  status: "pass" | "fail" | "error";
+  message: string;
+  response?: RouteResponse;
 };
 
 export type WasmModule = {

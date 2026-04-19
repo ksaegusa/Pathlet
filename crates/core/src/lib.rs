@@ -8,8 +8,8 @@ mod nat;
 mod policy;
 
 use ip::{interface_ip, ipv4_prefix_match};
-use nat::apply_nat;
-use policy::apply_policy;
+use nat::{NatState, apply_nat_stage, apply_reverse_nat_state};
+use policy::denied_policy_for_interface;
 
 pub type AdjacencyList = HashMap<String, Vec<(String, u32)>>;
 
@@ -294,6 +294,42 @@ pub struct TrafficSpec {
     pub destination: Option<String>,
 }
 
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct PacketState {
+    pub protocol: String,
+    pub port: Option<u16>,
+    pub source: Option<String>,
+    pub destination: Option<String>,
+}
+
+impl PacketState {
+    fn from_traffic(traffic: Option<&TrafficSpec>) -> Self {
+        let Some(traffic) = traffic else {
+            return Self {
+                protocol: "icmp".into(),
+                port: None,
+                source: None,
+                destination: None,
+            };
+        };
+        Self {
+            protocol: traffic.protocol.clone(),
+            port: traffic.port,
+            source: traffic.source.clone(),
+            destination: traffic.destination.clone(),
+        }
+    }
+
+    fn to_traffic_spec(&self) -> TrafficSpec {
+        TrafficSpec {
+            protocol: self.protocol.clone(),
+            port: self.port,
+            source: self.source.clone(),
+            destination: self.destination.clone(),
+        }
+    }
+}
+
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub struct RouteResponse {
     pub ok: bool,
@@ -316,9 +352,30 @@ pub struct RouteResponse {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub translated_destination: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
+    pub forward: Option<PipelineLeg>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub return_path: Option<PipelineLeg>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub loop_link_ids: Option<Vec<String>>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub error: Option<RouteError>,
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct PipelineLeg {
+    pub path: Vec<String>,
+    pub status: RouteStatus,
+    pub matched_route_ids: Vec<String>,
+    pub matched_policy_ids: Vec<String>,
+    pub matched_nat_rule_ids: Vec<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub source_before: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub destination_before: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub source_after: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub destination_after: Option<String>,
 }
 
 #[derive(Clone, Debug, Default, Deserialize, Eq, PartialEq, Serialize)]
@@ -365,6 +422,8 @@ pub struct Route {
     pub matched_nat_rule_ids: Vec<String>,
     pub translated_source: Option<String>,
     pub translated_destination: Option<String>,
+    pub forward: Option<PipelineLeg>,
+    pub return_path: Option<PipelineLeg>,
     pub loop_link_ids: Vec<String>,
 }
 
@@ -642,6 +701,8 @@ impl From<Result<Route, RouteError>> for RouteResponse {
                 matched_nat_rule_ids: Some(route.matched_nat_rule_ids),
                 translated_source: route.translated_source,
                 translated_destination: route.translated_destination,
+                forward: route.forward,
+                return_path: route.return_path,
                 loop_link_ids: Some(route.loop_link_ids),
                 error: None,
             },
@@ -656,6 +717,8 @@ impl From<Result<Route, RouteError>> for RouteResponse {
                 matched_nat_rule_ids: None,
                 translated_source: None,
                 translated_destination: None,
+                forward: None,
+                return_path: None,
                 loop_link_ids: None,
                 error: Some(error),
             },
@@ -744,6 +807,8 @@ pub fn shortest_path(
         matched_nat_rule_ids: vec![],
         translated_source: None,
         translated_destination: None,
+        forward: None,
+        return_path: None,
         loop_link_ids: vec![],
     })
 }
@@ -784,6 +849,8 @@ fn unreachable_shortest_path_route(
         matched_nat_rule_ids: vec![],
         translated_source: None,
         translated_destination: None,
+        forward: None,
+        return_path: None,
         loop_link_ids: vec![],
     }
 }
@@ -804,21 +871,283 @@ pub fn calculate_route(request: RouteRequest) -> Result<Route, RouteError> {
         )));
     }
 
-    let mut route = match request.mode {
-        RouteMode::ShortestPath => {
-            let adjacency = request.graph.adjacency_list()?;
-            shortest_path(&adjacency, &request.from_interface, &request.to_interface)
-        }
-        RouteMode::RoutingTable => routing_table_path(
-            &request.graph,
-            &request.from_interface,
-            &request.to_interface,
-        ),
-    }?;
+    let mut forward_packet = PacketState::from_traffic(request.traffic.as_ref());
+    let source_before = forward_packet.source.clone();
+    let destination_before = forward_packet.destination.clone();
+    let mut matched_nat_states = Vec::<NatState>::new();
+    let mut matched_nat_rule_ids = Vec::<String>::new();
 
-    apply_policy(&request.graph, &mut route, request.traffic.as_ref())?;
-    apply_nat(&request.graph, &mut route, request.traffic.as_ref())?;
+    let from_interface = request
+        .graph
+        .interfaces
+        .iter()
+        .find(|interface| interface.id == request.from_interface)
+        .ok_or_else(|| {
+            RouteError::not_found(format!(
+                "from_interface '{}' was not found",
+                request.from_interface
+            ))
+        })?;
+    if let Some(state) = apply_nat_stage(
+        &request.graph,
+        &mut forward_packet,
+        from_interface,
+        NatDirection::Ingress,
+        NatType::Destination,
+        &matched_nat_rule_ids,
+    ) {
+        matched_nat_rule_ids.push(state.rule_id.clone());
+        matched_nat_states.push(state);
+    }
+
+    let forward_to_interface = interface_for_packet_destination(&request.graph, &forward_packet)
+        .unwrap_or(request.to_interface.as_str());
+    let mut forward_route = route_for_mode(
+        &request.graph,
+        &request.mode,
+        &request.from_interface,
+        forward_to_interface,
+    )?;
+
+    if forward_route.status == RouteStatus::Reachable {
+        apply_pipeline_policy(&request.graph, &mut forward_route, &forward_packet)?;
+    }
+    if forward_route.status == RouteStatus::Reachable {
+        apply_post_routing_snat(
+            &request.graph,
+            &mut forward_route,
+            &mut forward_packet,
+            &mut matched_nat_rule_ids,
+            &mut matched_nat_states,
+        )?;
+    }
+    forward_route.matched_nat_rule_ids = matched_nat_rule_ids.clone();
+    forward_route.translated_source = changed_value(&source_before, &forward_packet.source);
+    forward_route.translated_destination =
+        changed_value(&destination_before, &forward_packet.destination);
+
+    let forward_leg = pipeline_leg(
+        &forward_route,
+        source_before.clone(),
+        destination_before.clone(),
+        forward_packet.source.clone(),
+        forward_packet.destination.clone(),
+    );
+
+    if forward_route.status != RouteStatus::Reachable {
+        forward_route.forward = Some(forward_leg);
+        return Ok(forward_route);
+    }
+
+    let return_source_before = forward_packet.destination.clone();
+    let return_destination_before = forward_packet.source.clone();
+    let mut return_packet = PacketState {
+        protocol: forward_packet.protocol.clone(),
+        port: forward_packet.port,
+        source: return_source_before.clone(),
+        destination: return_destination_before.clone(),
+    };
+    for state in matched_nat_states.iter().rev() {
+        apply_reverse_nat_state(&mut return_packet, state);
+    }
+
+    let mut return_route = route_for_mode(
+        &request.graph,
+        &request.mode,
+        &request.to_interface,
+        &request.from_interface,
+    )?;
+    return_route.matched_nat_rule_ids = matched_nat_rule_ids;
+    return_route.translated_source = changed_value(&return_source_before, &return_packet.source);
+    return_route.translated_destination =
+        changed_value(&return_destination_before, &return_packet.destination);
+
+    let return_leg = pipeline_leg(
+        &return_route,
+        return_source_before,
+        return_destination_before,
+        return_packet.source,
+        return_packet.destination,
+    );
+
+    let mut route = forward_route;
+    route.forward = Some(forward_leg);
+    route.return_path = Some(return_leg);
+    if return_route.status != RouteStatus::Reachable {
+        route.status = return_route.status;
+        route
+            .matched_route_ids
+            .extend(return_route.matched_route_ids);
+        route.loop_link_ids.extend(return_route.loop_link_ids);
+        route.loop_link_ids.sort();
+        route.loop_link_ids.dedup();
+    }
     Ok(route)
+}
+
+fn route_for_mode(
+    graph: &Graph,
+    mode: &RouteMode,
+    from_interface: &str,
+    to_interface: &str,
+) -> Result<Route, RouteError> {
+    match mode {
+        RouteMode::ShortestPath => {
+            let adjacency = graph.adjacency_list()?;
+            shortest_path(&adjacency, from_interface, to_interface)
+        }
+        RouteMode::RoutingTable => routing_table_path(graph, from_interface, to_interface),
+    }
+}
+
+fn interface_for_packet_destination<'a>(graph: &'a Graph, packet: &PacketState) -> Option<&'a str> {
+    let destination = packet.destination.as_deref()?;
+    let destination_ip = interface_ip(destination)?;
+    graph
+        .interfaces
+        .iter()
+        .find(|interface| {
+            interface
+                .ip_address
+                .as_deref()
+                .and_then(interface_ip)
+                .is_some_and(|interface_ip| interface_ip == destination_ip)
+        })
+        .map(|interface| interface.id.as_str())
+}
+
+fn changed_value(before: &Option<String>, after: &Option<String>) -> Option<String> {
+    (before != after).then(|| after.clone()).flatten()
+}
+
+fn pipeline_leg(
+    route: &Route,
+    source_before: Option<String>,
+    destination_before: Option<String>,
+    source_after: Option<String>,
+    destination_after: Option<String>,
+) -> PipelineLeg {
+    PipelineLeg {
+        path: route.path.clone(),
+        status: route.status.clone(),
+        matched_route_ids: route.matched_route_ids.clone(),
+        matched_policy_ids: route.matched_policy_ids.clone(),
+        matched_nat_rule_ids: route.matched_nat_rule_ids.clone(),
+        source_before,
+        destination_before,
+        source_after,
+        destination_after,
+    }
+}
+
+fn apply_pipeline_policy(
+    graph: &Graph,
+    route: &mut Route,
+    packet: &PacketState,
+) -> Result<(), RouteError> {
+    if graph.acls.is_empty() || graph.acl_attachments.is_empty() {
+        return Ok(());
+    }
+    let traffic = packet.to_traffic_spec();
+    let interface_by_id = graph
+        .interfaces
+        .iter()
+        .map(|interface| (interface.id.as_str(), interface))
+        .collect::<HashMap<_, _>>();
+
+    for (from_interface_id, to_interface_id) in active_path_pairs(graph, &route.path) {
+        let from_interface = interface_by_id
+            .get(from_interface_id.as_str())
+            .ok_or_else(|| {
+                RouteError::invalid_input(format!(
+                    "path references missing interface '{from_interface_id}'"
+                ))
+            })?;
+        let to_interface = interface_by_id
+            .get(to_interface_id.as_str())
+            .ok_or_else(|| {
+                RouteError::invalid_input(format!(
+                    "path references missing interface '{to_interface_id}'"
+                ))
+            })?;
+
+        if let Some(denied_policy_id) =
+            denied_policy_for_interface(graph, &traffic, to_interface, "ingress")
+        {
+            route.status = RouteStatus::PolicyDenied;
+            route.matched_policy_ids.push(denied_policy_id);
+            return Ok(());
+        }
+        if let Some(denied_policy_id) =
+            denied_policy_for_interface(graph, &traffic, from_interface, "egress")
+        {
+            route.status = RouteStatus::PolicyDenied;
+            route.matched_policy_ids.push(denied_policy_id);
+            return Ok(());
+        }
+    }
+
+    Ok(())
+}
+
+fn apply_post_routing_snat(
+    graph: &Graph,
+    route: &mut Route,
+    packet: &mut PacketState,
+    matched_nat_rule_ids: &mut Vec<String>,
+    matched_nat_states: &mut Vec<NatState>,
+) -> Result<(), RouteError> {
+    if graph.nat_rules.is_empty() {
+        return Ok(());
+    }
+    let interface_by_id = graph
+        .interfaces
+        .iter()
+        .map(|interface| (interface.id.as_str(), interface))
+        .collect::<HashMap<_, _>>();
+
+    for (from_interface_id, _) in active_path_pairs(graph, &route.path) {
+        let from_interface = interface_by_id
+            .get(from_interface_id.as_str())
+            .ok_or_else(|| {
+                RouteError::invalid_input(format!(
+                    "path references missing interface '{from_interface_id}'"
+                ))
+            })?;
+        if let Some(state) = apply_nat_stage(
+            graph,
+            packet,
+            from_interface,
+            NatDirection::Egress,
+            NatType::Source,
+            matched_nat_rule_ids,
+        ) {
+            matched_nat_rule_ids.push(state.rule_id.clone());
+            matched_nat_states.push(state);
+        }
+    }
+
+    route.matched_nat_rule_ids = matched_nat_rule_ids.clone();
+    Ok(())
+}
+
+fn active_path_pairs(graph: &Graph, path: &[String]) -> Vec<(String, String)> {
+    path.windows(2)
+        .filter_map(|window| {
+            let [from_interface, to_interface] = window else {
+                return None;
+            };
+            graph
+                .links
+                .iter()
+                .any(|link| {
+                    (link.from_interface == *from_interface && link.to_interface == *to_interface)
+                        || (link.from_interface == *to_interface
+                            && link.to_interface == *from_interface)
+                })
+                .then(|| (from_interface.clone(), to_interface.clone()))
+        })
+        .collect()
 }
 
 pub fn routing_table_path(
@@ -864,51 +1193,58 @@ pub fn routing_table_path(
                 matched_nat_rule_ids: vec![],
                 translated_source: None,
                 translated_destination: None,
+                forward: None,
+                return_path: None,
                 loop_link_ids,
             });
         }
 
-        let selected =
-            if let Some(link) = direct_link_to_node(graph, current_node_id, target_node_id) {
-                Some((None, link))
-            } else {
-                let Some(route) = best_route_for_node(
-                    current_node_id,
-                    target_node_id,
-                    to_interface,
-                    target_ip,
-                    &routes,
-                ) else {
-                    return Ok(Route {
-                        path: path.clone(),
-                        equal_cost_paths: vec![path],
-                        cost,
-                        status: RouteStatus::NoRoute,
-                        matched_route_ids,
-                        matched_policy_ids: vec![],
-                        matched_nat_rule_ids: vec![],
-                        translated_source: None,
-                        translated_destination: None,
-                        loop_link_ids,
-                    });
-                };
-                let Some(link) = resolve_route_link(graph, route) else {
-                    matched_route_ids.push(route.id.clone());
-                    return Ok(Route {
-                        path: path.clone(),
-                        equal_cost_paths: vec![path],
-                        cost,
-                        status: RouteStatus::Blackhole,
-                        matched_route_ids,
-                        matched_policy_ids: vec![],
-                        matched_nat_rule_ids: vec![],
-                        translated_source: None,
-                        translated_destination: None,
-                        loop_link_ids,
-                    });
-                };
-                Some((Some(route), link))
+        let selected = if let Some(link) =
+            connected_link_to_target(graph, current_node_id, target_node_id, target_ip)
+        {
+            Some((None, link))
+        } else {
+            let Some(route) = best_route_for_node(
+                current_node_id,
+                target_node_id,
+                to_interface,
+                target_ip,
+                &routes,
+            ) else {
+                return Ok(Route {
+                    path: path.clone(),
+                    equal_cost_paths: vec![path],
+                    cost,
+                    status: RouteStatus::NoRoute,
+                    matched_route_ids,
+                    matched_policy_ids: vec![],
+                    matched_nat_rule_ids: vec![],
+                    translated_source: None,
+                    translated_destination: None,
+                    forward: None,
+                    return_path: None,
+                    loop_link_ids,
+                });
             };
+            let Some(link) = resolve_route_link(graph, route) else {
+                matched_route_ids.push(route.id.clone());
+                return Ok(Route {
+                    path: path.clone(),
+                    equal_cost_paths: vec![path],
+                    cost,
+                    status: RouteStatus::Blackhole,
+                    matched_route_ids,
+                    matched_policy_ids: vec![],
+                    matched_nat_rule_ids: vec![],
+                    translated_source: None,
+                    translated_destination: None,
+                    forward: None,
+                    return_path: None,
+                    loop_link_ids,
+                });
+            };
+            Some((Some(route), link))
+        };
 
         let Some((route, link)) = selected else {
             unreachable!("routing table selection should return or select a link");
@@ -955,6 +1291,8 @@ pub fn routing_table_path(
                 matched_nat_rule_ids: vec![],
                 translated_source: None,
                 translated_destination: None,
+                forward: None,
+                return_path: None,
                 loop_link_ids,
             });
         }
@@ -973,6 +1311,8 @@ pub fn routing_table_path(
         matched_nat_rule_ids: vec![],
         translated_source: None,
         translated_destination: None,
+        forward: None,
+        return_path: None,
         loop_link_ids,
     })
 }
@@ -1069,12 +1409,45 @@ fn resolve_route_link<'a>(graph: &'a Graph, route: &RouteEntry) -> Option<&'a Li
         })
 }
 
-fn direct_link_to_node<'a>(
+fn connected_link_to_target<'a>(
     graph: &'a Graph,
     from_node_id: &str,
     to_node_id: &str,
+    target_ip: Option<Ipv4Addr>,
 ) -> Option<&'a Link> {
-    active_link_between_nodes(graph, from_node_id, to_node_id, None)
+    let direct_links = active_links_from_node(graph, from_node_id)
+        .into_iter()
+        .filter(|link| {
+            let Some((_, ingress_interface)) = oriented_link_interfaces(link, from_node_id, graph)
+            else {
+                return false;
+            };
+            graph.interfaces.iter().any(|interface| {
+                interface.id == ingress_interface && interface.node_id == to_node_id
+            })
+        })
+        .collect::<Vec<_>>();
+
+    if let Some(target_ip) = target_ip
+        && let Some(link) = direct_links.iter().copied().find(|link| {
+            let Some((egress_interface, _)) = oriented_link_interfaces(link, from_node_id, graph)
+            else {
+                return false;
+            };
+            graph.interfaces.iter().any(|interface| {
+                interface.id == egress_interface
+                    && interface
+                        .ip_address
+                        .as_deref()
+                        .and_then(|ip_address| ipv4_prefix_match(ip_address, target_ip))
+                        .is_some()
+            })
+        })
+    {
+        return Some(link);
+    }
+
+    direct_links.into_iter().next()
 }
 
 fn active_link_between_nodes<'a>(
@@ -1176,6 +1549,8 @@ pub fn calculate_route_json(input: &str) -> String {
             matched_nat_rule_ids: None,
             translated_source: None,
             translated_destination: None,
+            forward: None,
+            return_path: None,
             loop_link_ids: None,
             error: Some(RouteError::invalid_input(format!(
                 "invalid JSON/YAML route request: {error}"
@@ -1468,6 +1843,29 @@ mod tests {
     }
 
     #[test]
+    fn routing_table_mode_prefers_connected_prefix_over_other_direct_link() {
+        let mut graph = sample_graph();
+        graph
+            .interfaces
+            .iter_mut()
+            .find(|interface| interface.id == "r2-eth1")
+            .unwrap()
+            .ip_address = Some("10.0.2.2/24".into());
+        graph
+            .links
+            .iter_mut()
+            .find(|link| link.id == "down")
+            .unwrap()
+            .active = true;
+
+        let route = routing_table_path(&graph, "r2-eth0", "r3-eth0").unwrap();
+
+        assert_eq!(route.status, RouteStatus::Reachable);
+        assert_eq!(route.path, vec!["r2-eth0", "r2-eth1", "r3-eth0"]);
+        assert_eq!(route.matched_route_ids, Vec::<String>::new());
+    }
+
+    #[test]
     fn routing_table_mode_uses_yang_routing() {
         let mut graph = sample_graph();
         graph.links.retain(|link| link.id != "l3");
@@ -1656,6 +2054,51 @@ mod tests {
         assert_eq!(route.matched_nat_rule_ids, vec!["r2-snat"]);
         assert_eq!(route.translated_source, Some("203.0.113.10".into()));
         assert_eq!(route.translated_destination, None);
+        assert_eq!(
+            route
+                .return_path
+                .as_ref()
+                .and_then(|leg| leg.destination_after.clone()),
+            Some("10.0.0.1/24".into())
+        );
+    }
+
+    #[test]
+    fn route_calculation_fails_when_stateful_return_has_no_route() {
+        let mut graph = sample_graph();
+        graph.links.retain(|link| link.id != "l3");
+        graph.routes.push(RouteEntry {
+            id: "r1-to-r3".into(),
+            node_id: "r1".into(),
+            destination: "r3".into(),
+            next_hop: Some("r2".into()),
+            egress_interface: Some("r1-eth0".into()),
+            metric: 10,
+            administrative_distance: Some(1),
+            vrf_id: Some("default".into()),
+            vlan_id: None,
+            active: true,
+        });
+
+        let route = calculate_route(RouteRequest {
+            graph,
+            from_interface: "r1-eth0".into(),
+            to_interface: "r3-eth0".into(),
+            mode: RouteMode::RoutingTable,
+            traffic: Some(TrafficSpec {
+                protocol: "tcp".into(),
+                port: Some(443),
+                source: Some("10.0.0.1/24".into()),
+                destination: Some("10.0.2.3/24".into()),
+            }),
+        })
+        .unwrap();
+
+        assert_ne!(route.status, RouteStatus::Reachable);
+        assert_eq!(
+            route.return_path.as_ref().map(|leg| leg.status.clone()),
+            Some(RouteStatus::NoRoute)
+        );
     }
 
     #[test]
@@ -1670,26 +2113,19 @@ mod tests {
         let json = serde_json::to_string(&request).unwrap();
         let response: RouteResponse = serde_json::from_str(&calculate_route_json(&json)).unwrap();
 
+        assert!(response.ok);
         assert_eq!(
-            response,
-            RouteResponse {
-                ok: true,
-                path: Some(vec!["r1-eth0".into(), "r2-eth0".into(), "r3-eth0".into()]),
-                equal_cost_paths: Some(vec![vec![
-                    "r1-eth0".into(),
-                    "r2-eth0".into(),
-                    "r3-eth0".into()
-                ]]),
-                cost: Some(15),
-                status: Some(RouteStatus::Reachable),
-                matched_route_ids: Some(vec![]),
-                matched_policy_ids: Some(vec![]),
-                matched_nat_rule_ids: Some(vec![]),
-                translated_source: None,
-                translated_destination: None,
-                loop_link_ids: Some(vec![]),
-                error: None,
-            }
+            response.path,
+            Some(vec!["r1-eth0".into(), "r2-eth0".into(), "r3-eth0".into()])
+        );
+        assert_eq!(response.status, Some(RouteStatus::Reachable));
+        assert_eq!(
+            response.forward.as_ref().map(|leg| leg.status.clone()),
+            Some(RouteStatus::Reachable)
+        );
+        assert_eq!(
+            response.return_path.as_ref().map(|leg| leg.status.clone()),
+            Some(RouteStatus::Reachable)
         );
     }
 

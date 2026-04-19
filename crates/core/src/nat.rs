@@ -1,129 +1,70 @@
-use std::collections::HashMap;
-
 use crate::ip::{interface_ip, ipv4_network_matches};
-use crate::{
-    Graph, Interface, NatDirection, NatRule, NatType, Route, RouteError, RouteStatus, TrafficSpec,
-};
+use crate::{Graph, Interface, NatDirection, NatRule, NatType, PacketState, TrafficSpec};
 
-pub(crate) fn apply_nat(
-    graph: &Graph,
-    route: &mut Route,
-    traffic: Option<&TrafficSpec>,
-) -> Result<(), RouteError> {
-    if graph.nat_rules.is_empty() || route.status != RouteStatus::Reachable {
-        return Ok(());
-    }
-
-    let Some(traffic) = traffic else {
-        return Ok(());
-    };
-
-    let interface_by_id = graph
-        .interfaces
-        .iter()
-        .map(|interface| (interface.id.as_str(), interface))
-        .collect::<HashMap<_, _>>();
-    let mut current_source = traffic.source.clone();
-    let mut current_destination = traffic.destination.clone();
-
-    let path_pairs = route
-        .path
-        .windows(2)
-        .filter_map(to_pair)
-        .map(|[from_interface_id, to_interface_id]| {
-            (from_interface_id.clone(), to_interface_id.clone())
-        })
-        .collect::<Vec<_>>();
-
-    for (from_interface_id, to_interface_id) in path_pairs {
-        let from_interface_id = from_interface_id.as_str();
-        let to_interface_id = to_interface_id.as_str();
-        let Some(_link) = graph.links.iter().find(|link| {
-            (link.from_interface == from_interface_id && link.to_interface == to_interface_id)
-                || (link.from_interface == to_interface_id
-                    && link.to_interface == from_interface_id)
-        }) else {
-            continue;
-        };
-
-        let from_interface = interface_by_id.get(from_interface_id).ok_or_else(|| {
-            RouteError::invalid_input(format!(
-                "path references missing interface '{from_interface_id}'"
-            ))
-        })?;
-        let to_interface = interface_by_id.get(to_interface_id).ok_or_else(|| {
-            RouteError::invalid_input(format!(
-                "path references missing interface '{to_interface_id}'"
-            ))
-        })?;
-
-        apply_nat_for_interface(
-            graph,
-            route,
-            traffic,
-            &mut current_source,
-            &mut current_destination,
-            from_interface,
-            NatDirection::Egress,
-        );
-        apply_nat_for_interface(
-            graph,
-            route,
-            traffic,
-            &mut current_source,
-            &mut current_destination,
-            to_interface,
-            NatDirection::Ingress,
-        );
-    }
-
-    Ok(())
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub(crate) struct NatState {
+    pub rule_id: String,
+    pub nat_type: NatType,
+    pub original: String,
+    pub translated: String,
 }
 
-fn to_pair<T>(window: &[T]) -> Option<[&T; 2]> {
-    let [left, right] = window else {
-        return None;
-    };
-    Some([left, right])
-}
-
-fn apply_nat_for_interface(
+pub(crate) fn apply_nat_stage(
     graph: &Graph,
-    route: &mut Route,
-    traffic: &TrafficSpec,
-    current_source: &mut Option<String>,
-    current_destination: &mut Option<String>,
+    packet: &mut PacketState,
     interface: &Interface,
     direction: NatDirection,
-) {
-    let Some(rule) = graph
+    nat_type: NatType,
+    already_matched_rule_ids: &[String],
+) -> Option<NatState> {
+    let traffic = packet.to_traffic_spec();
+    let rule = graph
         .nat_rules
         .iter()
-        .filter(|rule| !route.matched_nat_rule_ids.contains(&rule.id))
+        .filter(|rule| !already_matched_rule_ids.contains(&rule.id))
         .find(|rule| {
-            nat_rule_matches(
-                rule,
-                traffic,
-                current_source.as_deref(),
-                current_destination.as_deref(),
-                interface,
-                &direction,
-                graph,
-            )
-        })
-    else {
-        return;
-    };
+            rule.nat_type == nat_type
+                && nat_rule_matches(
+                    rule,
+                    &traffic,
+                    packet.source.as_deref(),
+                    packet.destination.as_deref(),
+                    interface,
+                    &direction,
+                    graph,
+                )
+        })?;
 
-    route.matched_nat_rule_ids.push(rule.id.clone());
+    let original = match rule.nat_type {
+        NatType::Source => packet.source.clone(),
+        NatType::Destination => packet.destination.clone(),
+    }
+    .unwrap_or_else(|| rule.original.clone());
+
+    let state = NatState {
+        rule_id: rule.id.clone(),
+        nat_type: rule.nat_type.clone(),
+        original,
+        translated: rule.translated.clone(),
+    };
     match rule.nat_type {
+        NatType::Source => packet.source = Some(rule.translated.clone()),
+        NatType::Destination => packet.destination = Some(rule.translated.clone()),
+    }
+    Some(state)
+}
+
+pub(crate) fn apply_reverse_nat_state(packet: &mut PacketState, state: &NatState) {
+    match state.nat_type {
         NatType::Source => {
-            *current_source = Some(rule.translated.clone());
-            route.translated_source = current_source.clone();
+            if packet.destination.as_deref() == Some(state.translated.as_str()) {
+                packet.destination = Some(state.original.clone());
+            }
         }
         NatType::Destination => {
-            *current_destination = Some(rule.translated.clone());
-            route.translated_destination = current_destination.clone();
+            if packet.source.as_deref() == Some(state.translated.as_str()) {
+                packet.source = Some(state.original.clone());
+            }
         }
     }
 }

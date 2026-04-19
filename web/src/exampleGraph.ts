@@ -12,6 +12,7 @@ import type {
   NodeModel,
   PolicyRuleModel,
   RouteEntryModel,
+  TrafficTestRecordModel,
 } from "./types";
 
 const exampleNodes: NodeModel[] = [
@@ -23,6 +24,7 @@ const exampleNodes: NodeModel[] = [
   { id: "dr-center", device_type: "network_device", layer: "core" },
   { id: "internet-gw", device_type: "network_device", layer: "core" },
   { id: "auth", device_type: "client", layer: "service" },
+  { id: "public-api", device_type: "client", layer: "service" },
 ];
 
 type ExampleLinkSpec = {
@@ -85,6 +87,7 @@ const exampleLinkSpecs = [
   exampleLinkSpec("dr-internet", "dr-center", "internet-gw", 1000),
   exampleLinkSpec("primary-auth", "primary-center", "auth", 10000),
   exampleLinkSpec("dr-auth", "dr-center", "auth", 1000),
+  exampleLinkSpec("internet-public-api", "internet-gw", "public-api", 1000),
 ];
 
 const exampleInterfaces = [
@@ -126,6 +129,15 @@ const exampleRouteSpecs = [
     vlanId: 100,
   }),
   exampleRouteSpec({
+    id: "osaka-wan-public-api",
+    nodeId: "osaka-wan",
+    destination: "public-api",
+    nextHop: "primary-center",
+    egressLinkId: "osaka-primary",
+    metric: 20,
+    vlanId: 100,
+  }),
+  exampleRouteSpec({
     id: "osaka-wan-dr",
     nodeId: "osaka-wan",
     destination: "primary-center",
@@ -151,6 +163,24 @@ const exampleRouteSpecs = [
     metric: 20,
     vlanId: 100,
   }),
+  exampleRouteSpec({
+    id: "tokyo-wan-public-api",
+    nodeId: "tokyo-wan",
+    destination: "public-api",
+    nextHop: "primary-center",
+    egressLinkId: "tokyo-primary",
+    metric: 20,
+    vlanId: 100,
+  }),
+  exampleRouteSpec({
+    id: "primary-center-public-api",
+    nodeId: "primary-center",
+    destination: "public-api",
+    nextHop: "internet-gw",
+    egressLinkId: "primary-internet",
+    metric: 20,
+    vlanId: 100,
+  }),
 ];
 
 const examplePolicies: PolicyRuleModel[] = [
@@ -158,13 +188,13 @@ const examplePolicies: PolicyRuleModel[] = [
     id: "primary-center-allow-https",
     node_id: "primary-center",
     acl_name: "primary-center-ingress",
-    ace_name: "allow-https-to-erp",
-    name: "allow-https-to-erp",
+    ace_name: "allow-https-to-public-api",
+    name: "allow-https-to-public-api",
     direction: "ingress",
     action: "permit",
     protocol: "tcp",
-    source: "osaka-office",
-    destination: "10.10.0.10/32",
+    source: "10.0.0.1/32",
+    destination: "10.0.10.2/32",
     port: 443,
     active: true,
   },
@@ -208,7 +238,7 @@ export const exampleGraph: GraphModel = {
       address: "10.10.0.10",
       active_node_id: "primary-center",
       standby_node_ids: ["dr-center"],
-      service_node_id: "primary-center",
+      service_node_id: "auth",
     },
   ],
   links: exampleLinkSpecs.map(exampleLink),
@@ -217,3 +247,45 @@ export const exampleGraph: GraphModel = {
   acls: policiesToYangAcls(examplePolicies),
   acl_attachments: policiesToYangAclAttachments(examplePolicies),
 };
+
+export const exampleTrafficTests: TrafficTestRecordModel[] = [
+  {
+    id: "sample-osaka-public-api-https",
+    name: "Osaka office to public API HTTPS",
+    enabled: true,
+    source: "10.0.0.1",
+    destination: "10.0.10.2",
+    protocol: "tcp",
+    port: 443,
+    expectations: {
+      reachable: true,
+      scope: "round_trip",
+    },
+  },
+  {
+    id: "sample-osaka-public-api-http-deny",
+    name: "Osaka office to public API HTTP deny",
+    enabled: true,
+    source: "10.0.0.1",
+    destination: "10.0.10.2",
+    protocol: "tcp",
+    port: 80,
+    expectations: {
+      reachable: false,
+      scope: "round_trip",
+    },
+  },
+  {
+    id: "sample-osaka-public-api-return-no-route",
+    name: "Osaka office to public API return route missing",
+    enabled: true,
+    source: "10.0.0.1",
+    destination: "10.0.10.2",
+    protocol: "tcp",
+    port: 443,
+    expectations: {
+      reachable: false,
+      scope: "round_trip",
+    },
+  },
+];

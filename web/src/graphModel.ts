@@ -13,10 +13,14 @@ import type {
   NodeModel,
   PolicyProtocol,
   PolicyRuleModel,
+  ReachabilityScope,
   RouteEdgeDirection,
   RouteEntryModel,
   RouteRequest,
   RouteResponse,
+  TrafficTestRecordModel,
+  TrafficTestResultModel,
+  TrafficTestSuiteModel,
   TrafficIntent,
   TrafficProtocol,
   YangAclAttachmentModel,
@@ -80,6 +84,7 @@ export function buildTrafficIntent(
   protocol: TrafficProtocol,
   port: number | undefined,
   reachable: boolean,
+  scope: ReachabilityScope,
   viaNodeId: string
 ): TrafficIntent {
   const normalizedPort = protocol === "icmp" ? undefined : normalizeTransportPort(port);
@@ -90,6 +95,7 @@ export function buildTrafficIntent(
     port: normalizedPort,
     expectations: {
       reachable,
+      scope,
       via_node_id: viaNodeId || undefined,
       strict_path: false,
     },
@@ -259,17 +265,18 @@ export function sanitizeClassName(value: string) {
 export function buildLayout(graph: GraphModel, direction: LayoutDirection) {
   const layout = new Map<string, { x: number; y: number }>();
   const groups = graphGroups(graph);
-  const groupWidth = 700 / Math.max(groups.length, 1);
+  const topologyContentWidth = 1060;
+  const groupWidth = topologyContentWidth / Math.max(groups.length, 1);
   const groupHeight = 404 / Math.max(groups.length, 1);
 
   groups.forEach((group, groupIndex) => {
     const nodes = graph.nodes.filter((node) => nodeGroupId(node) === group.id);
     nodes.forEach((node, index) => {
       const verticalSpacing = 340 / Math.max(nodes.length, 1);
-      const horizontalSpacing = 620 / Math.max(nodes.length, 1);
+      const horizontalSpacing = 980 / Math.max(nodes.length, 1);
       const autoX =
         direction === "lr"
-          ? 30 + groupIndex * groupWidth + Math.max(92, groupWidth - 30) / 2
+          ? 30 + groupIndex * groupWidth + Math.max(120, groupWidth - 30) / 2
           : 70 + horizontalSpacing / 2 + index * horizontalSpacing;
       const autoY =
         direction === "lr"
@@ -442,12 +449,100 @@ export function parseTopologyText(input: string, fileName: string): InputGraphMo
   return parsed as InputGraphModel | InputRouteRequest;
 }
 
+export function parseTestSuiteText(input: string, fileName: string): TrafficTestSuiteModel {
+  const isYaml = /\.(ya?ml)$/i.test(fileName);
+  const parsed = isYaml ? parseYaml(input) : JSON.parse(input);
+  if (!isRecord(parsed)) {
+    throw new Error("試験JSON/YAMLが不正です");
+  }
+
+  const tests = Array.isArray(parsed.tests) ? parsed.tests : Array.isArray(parsed) ? parsed : undefined;
+  if (!tests) {
+    throw new Error("tests を持つ試験ファイルを指定してください");
+  }
+
+  return {
+    version: 1,
+    tests: tests.map((test, index) => cleanTrafficTestRecord(test, index)),
+  };
+}
+
+export function exportableTestSuite(tests: TrafficTestRecordModel[]): TrafficTestSuiteModel {
+  return {
+    version: 1,
+    tests: tests.map(cleanTrafficTestRecord),
+  };
+}
+
 export function routeRequestOrGraphToGraph(parsed: InputGraphModel | InputRouteRequest): GraphModel {
   const nextGraph = "graph" in parsed ? parsed.graph : parsed;
   if (!isRecord(nextGraph) || !Array.isArray(nextGraph.nodes) || !Array.isArray(nextGraph.interfaces) || !Array.isArray(nextGraph.links)) {
     throw new Error("nodes/interfaces/links を持つGraphModelまたはRouteRequestを指定してください");
   }
   return normalizeGraphModel(nextGraph);
+}
+
+export function buildRouteRequestFromTest(graph: GraphModel, test: TrafficTestRecordModel): RouteRequest {
+  const fromInterface = resolveInterfaceByIp(graph, test.source);
+  const toInterface = resolveInterfaceByIp(graph, test.destination);
+  if (!fromInterface) {
+    throw new Error(`送信元IP '${test.source}' に一致するインターフェースがありません`);
+  }
+  if (!toInterface) {
+    throw new Error(`宛先IP '${test.destination}' に一致するインターフェースがありません`);
+  }
+
+  return {
+    graph,
+    from_interface: fromInterface.id,
+    to_interface: toInterface.id,
+    mode: "routing_table",
+    traffic: {
+      protocol: test.protocol,
+      port: test.protocol === "icmp" ? undefined : normalizeTransportPort(test.port),
+      source: test.source,
+      destination: test.destination,
+    },
+  };
+}
+
+export function evaluateTrafficTest(
+  test: TrafficTestRecordModel,
+  response: RouteResponse,
+  _graph: GraphModel
+): TrafficTestResultModel {
+  if (!response.ok) {
+    return {
+      test_id: test.id,
+      status: test.expectations.reachable ? "fail" : "pass",
+      message: response.error.message,
+      response,
+    };
+  }
+
+  const scope = test.expectations.scope ?? "round_trip";
+  const routeStatus = scope === "forward_only"
+    ? response.forward?.status ?? response.status ?? "reachable"
+    : response.status ?? "reachable";
+  const failures = [
+    test.expectations.reachable !== (routeStatus === "reachable")
+      ? `到達性: 期待 ${test.expectations.reachable ? "到達可能" : "到達不可"} / 実際 ${routeStatus}`
+      : undefined,
+  ].filter((failure): failure is string => Boolean(failure));
+
+  return {
+    test_id: test.id,
+    status: failures.length ? "fail" : "pass",
+    message: failures.length ? failures.join(" / ") : "期待値に一致しました",
+    response,
+  };
+}
+
+export function resolveInterfaceByIp(graph: GraphModel, ip: string) {
+  const targetIp = interfaceIpAddress(ip.trim());
+  return graph.interfaces.find((interfaceItem) =>
+    interfaceItem.ip_address ? interfaceIpAddress(interfaceItem.ip_address) === targetIp : false
+  );
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -748,6 +843,26 @@ export function cleanNatRule(rule: NatRuleModel): NatRuleModel {
   };
 }
 
+export function cleanTrafficTestRecord(input: unknown, index = 0): TrafficTestRecordModel {
+  const record = isRecord(input) ? input : {};
+  const protocol = isTrafficProtocol(record.protocol) ? record.protocol : "tcp";
+  const expectations = isRecord(record.expectations) ? record.expectations : {};
+  const scope = expectations.scope === "forward_only" ? "forward_only" : "round_trip";
+  return {
+    id: stringValue(record.id, `test-${index + 1}`),
+    name: stringValue(record.name, "") || undefined,
+    enabled: typeof record.enabled === "boolean" ? record.enabled : true,
+    source: stringValue(record.source, ""),
+    destination: stringValue(record.destination, ""),
+    protocol,
+    port: protocol === "icmp" ? undefined : normalizeTransportPort(numberValue(record.port, 443)),
+    expectations: {
+      reachable: typeof expectations.reachable === "boolean" ? expectations.reachable : true,
+      scope,
+    },
+  };
+}
+
 export function uniqueRouteId(graph: GraphModel, nodeId: string) {
   const base = `${nodeId}-route`.replaceAll(/[^a-zA-Z0-9-]+/g, "-");
   let candidate = base;
@@ -787,6 +902,18 @@ export function uniqueNatRuleId(graph: GraphModel, nodeId: string) {
   return candidate;
 }
 
+export function uniqueTrafficTestId(tests: TrafficTestRecordModel[]) {
+  let suffix = tests.length + 1;
+  let candidate = `test-${suffix}`;
+
+  while (tests.some((test) => test.id === candidate)) {
+    suffix += 1;
+    candidate = `test-${suffix}`;
+  }
+
+  return candidate;
+}
+
 export function uniqueLinkId(graph: GraphModel, fromInterface: string, toInterface: string) {
   const base = `${fromInterface}-to-${toInterface}`.replaceAll(/[^a-zA-Z0-9-]+/g, "-");
   let candidate = base;
@@ -798,6 +925,18 @@ export function uniqueLinkId(graph: GraphModel, fromInterface: string, toInterfa
   }
 
   return candidate;
+}
+
+function isTrafficProtocol(value: unknown): value is TrafficProtocol {
+  return value === "icmp" || value === "tcp" || value === "udp";
+}
+
+function stringValue(value: unknown, fallback: string) {
+  return typeof value === "string" ? value.trim() : fallback;
+}
+
+function numberValue(value: unknown, fallback: number) {
+  return typeof value === "number" && Number.isFinite(value) ? value : fallback;
 }
 
 export function interfaceForNewLinkEndpoint(graph: GraphModel, nodeId: string, linkId: string) {

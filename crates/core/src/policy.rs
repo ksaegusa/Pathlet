@@ -1,90 +1,9 @@
 use std::collections::HashMap;
 
 use crate::ip::{interface_ip, ipv4_network_matches};
-use crate::{
-    Graph, Interface, Route, RouteError, RouteStatus, TrafficSpec, YangAce, YangForwardingAction,
-    YangTransportMatch,
-};
+use crate::{Graph, Interface, TrafficSpec, YangAce, YangForwardingAction, YangTransportMatch};
 
-pub(crate) fn apply_policy(
-    graph: &Graph,
-    route: &mut Route,
-    traffic: Option<&TrafficSpec>,
-) -> Result<(), RouteError> {
-    if graph.acls.is_empty()
-        || graph.acl_attachments.is_empty()
-        || route.status != RouteStatus::Reachable
-    {
-        return Ok(());
-    }
-
-    let Some(traffic) = traffic else {
-        return Ok(());
-    };
-
-    let interface_by_id = graph
-        .interfaces
-        .iter()
-        .map(|interface| (interface.id.as_str(), interface))
-        .collect::<HashMap<_, _>>();
-
-    let path_pairs = route
-        .path
-        .windows(2)
-        .filter_map(to_pair)
-        .map(|[from_interface_id, to_interface_id]| {
-            (from_interface_id.clone(), to_interface_id.clone())
-        })
-        .collect::<Vec<_>>();
-
-    for (from_interface_id, to_interface_id) in path_pairs {
-        let from_interface_id = from_interface_id.as_str();
-        let to_interface_id = to_interface_id.as_str();
-        let Some(_link) = graph.links.iter().find(|link| {
-            (link.from_interface == from_interface_id && link.to_interface == to_interface_id)
-                || (link.from_interface == to_interface_id
-                    && link.to_interface == from_interface_id)
-        }) else {
-            continue;
-        };
-        let from_interface = interface_by_id.get(from_interface_id).ok_or_else(|| {
-            RouteError::invalid_input(format!(
-                "path references missing interface '{from_interface_id}'"
-            ))
-        })?;
-        let to_interface = interface_by_id.get(to_interface_id).ok_or_else(|| {
-            RouteError::invalid_input(format!(
-                "path references missing interface '{to_interface_id}'"
-            ))
-        })?;
-
-        if let Some(denied_policy_id) =
-            denied_policy_for_interface(graph, traffic, from_interface, "egress")
-        {
-            route.status = RouteStatus::PolicyDenied;
-            route.matched_policy_ids.push(denied_policy_id);
-            return Ok(());
-        }
-        if let Some(denied_policy_id) =
-            denied_policy_for_interface(graph, traffic, to_interface, "ingress")
-        {
-            route.status = RouteStatus::PolicyDenied;
-            route.matched_policy_ids.push(denied_policy_id);
-            return Ok(());
-        }
-    }
-
-    Ok(())
-}
-
-fn to_pair<T>(window: &[T]) -> Option<[&T; 2]> {
-    let [left, right] = window else {
-        return None;
-    };
-    Some([left, right])
-}
-
-fn denied_policy_for_interface(
+pub(crate) fn denied_policy_for_interface(
     graph: &Graph,
     traffic: &TrafficSpec,
     interface: &Interface,
