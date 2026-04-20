@@ -34,16 +34,18 @@ select {
 }
 
 .topology-group {
-  fill: rgb(255 255 255 / 0.52);
-  stroke: #e4e4e7;
-  stroke-width: 1.2;
+  fill: transparent;
+  stroke: #d4d4d8;
+  stroke-dasharray: 6 6;
+  stroke-width: 1;
 }
 
 .topology-group-label {
-  fill: #71717a;
-  font-size: 10px;
+  fill: #52525b;
+  font-size: 9px;
   font-weight: 800;
   letter-spacing: 0;
+  pointer-events: none;
   text-anchor: start;
   text-transform: uppercase;
 }
@@ -158,17 +160,17 @@ select {
 
 .node-label {
   cursor: grab;
-  font-size: 11px;
+  font-size: 10px;
   font-weight: 800;
   user-select: none;
 }
 
 .topology.density-dense .node-label {
-  font-size: 9px;
+  font-size: 8px;
 }
 
 .topology.density-crowded .node-label {
-  font-size: 8px;
+  font-size: 7px;
 }
 
 .node-label.dimmed {

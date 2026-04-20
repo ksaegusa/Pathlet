@@ -1,14 +1,14 @@
 import { ChangeEvent, type ReactNode, useEffect, useMemo, useState } from "react";
 import { createRoot } from "react-dom/client";
-import { Cable, FileDown, FileJson, GitBranch, ListChecks, Network, Shield, Zap } from "lucide-react";
+import { FileDown, FileJson, ListChecks, Network, Shield } from "lucide-react";
 import { stringify as stringifyYaml } from "yaml";
-import { Badge, Card, CardHeader, EndpointSummary, Metric, Modal, buttonClass, cn } from "./components/common";
-import { GraphEditor, LinksPanel, NatPanel, NodeDetailsPanel, PolicyPanel, RoutingPanel, SelectedLinkPanel, TrafficIntentEditor, TrafficTestDetailPanel, TrafficTestsPanel } from "./components/editors";
+import { Badge, Card, CardHeader, Field, Modal, SearchableEndpointSelect, buttonClass, cn } from "./components/common";
+import { GraphEditor, NatPanel, NodeDetailsPanel, PolicyPanel, RoutingPanel, SelectedLinkPanel, TrafficIntentEditor, TrafficTestDetailPanel, TrafficTestsPanel } from "./components/editors";
 import { RouteDetails } from "./components/RouteDetails";
 import { Topology } from "./components/Topology";
 import { exampleGraph, exampleTrafficTests } from "./exampleGraph";
 import { modalTitle, routeStatusLabel } from "./formatters";
-import { causeCodeLabel, causeTone, diagnoseRoute, diagnoseTrafficTest, endpointNameForIp, evaluationTone, factLabel, factTone, nodeDecisionStates, trafficTestTitle, type RouteDiagnosis } from "./diagnosis";
+import { actualReachabilityLabel, causeCodeLabel, causeTone, diagnoseRoute, diagnoseTrafficTest, endpointNameForIp, evaluationTone, factLabel, factTone, nextActionForDiagnosis, nodeDecisionStates, trafficTestTitle, type RouteDiagnosis } from "./diagnosis";
 import { buildElkLayout } from "./topologyLayout";
 import {
   applyRuntimeState,
@@ -39,6 +39,7 @@ import {
   routeDirectionsFromPath,
   routeEntriesFromGraph,
   routeRequestOrGraphToGraph,
+  resolveInterfaceByIp,
   toggleSetValue,
   uniqueLinkId,
   uniqueNatRuleId,
@@ -90,9 +91,14 @@ function App() {
   const [newLinkCost, setNewLinkCost] = useState(5);
   const [trafficProtocol, setTrafficProtocol] = useState<TrafficProtocol>("tcp");
   const [trafficPort, setTrafficPort] = useState(443);
+  const [manualSourceIp, setManualSourceIp] = useState(() =>
+    interfaceHostIp(exampleGraph, linkEndpointInterfaceId("osaka-office-wan", "osaka-office"))
+  );
+  const [manualDestinationIp, setManualDestinationIp] = useState(() =>
+    interfaceHostIp(exampleGraph, linkEndpointInterfaceId("internet-public-api", "public-api"))
+  );
   const [expectedReachable, setExpectedReachable] = useState(true);
   const [reachabilityScope, setReachabilityScope] = useState<ReachabilityScope>("round_trip");
-  const [expectedViaNodeId, setExpectedViaNodeId] = useState("primary-center");
   const [downNodeIds, setDownNodeIds] = useState<Set<string>>(() => new Set());
   const [downInterfaceIds, setDownInterfaceIds] = useState<Set<string>>(() => new Set());
   const [layoutDirection, setLayoutDirection] = useState<LayoutDirection>("lr");
@@ -114,6 +120,7 @@ function App() {
     [graph, downNodeIds, downInterfaceIds]
   );
   const groups = useMemo(() => graphGroups(graph), [graph]);
+  const endpointOptions = useMemo(() => interfaceEndpointOptions(graph), [graph]);
   const trafficIntent = useMemo(
     () =>
       buildTrafficIntent(
@@ -124,9 +131,9 @@ function App() {
         trafficProtocol === "icmp" ? undefined : trafficPort,
         expectedReachable,
         reachabilityScope,
-        expectedViaNodeId
+        ""
       ),
-    [graph, fromInterface, toInterface, trafficProtocol, trafficPort, expectedReachable, reachabilityScope, expectedViaNodeId]
+    [graph, fromInterface, toInterface, trafficProtocol, trafficPort, expectedReachable, reachabilityScope]
   );
   const selectedTrafficTest = useMemo(
     () => trafficTests.find((test) => test.id === selectedTrafficTestId),
@@ -150,6 +157,18 @@ function App() {
     () => selectedTrafficTest ? diagnoseTrafficTest(selectedTrafficTestResult, selectedTrafficTest) : diagnoseRoute(routeResponse, trafficIntent),
     [routeResponse, selectedTrafficTest, selectedTrafficTestResult, trafficIntent]
   );
+  const displaySourceLabel = selectedTrafficTest
+    ? endpointNameForIp(effectiveGraph, selectedTrafficTest.source)
+    : manualSourceIp || trafficIntent.source_node_id;
+  const displayDestinationLabel = selectedTrafficTest
+    ? endpointNameForIp(effectiveGraph, selectedTrafficTest.destination)
+    : manualDestinationIp || trafficIntent.destination_node_id;
+  const displayProtocolLabel = selectedTrafficTest
+    ? `${selectedTrafficTest.protocol.toUpperCase()}${selectedTrafficTest.protocol === "icmp" ? "" : `/${selectedTrafficTest.port ?? 443}`}`
+    : `${trafficProtocol.toUpperCase()}${trafficProtocol === "icmp" ? "" : `/${trafficPort}`}`;
+  const displayContextLabel = selectedTrafficTest
+    ? `試験: ${selectedTrafficTest.name || selectedTrafficTest.id}`
+    : "手動条件";
   const displayRouteEdgeDirections = useMemo(() => routeDirectionsFromPath(displayResponse, effectiveGraph), [displayResponse, effectiveGraph]);
   const displayLoopLinkIds = useMemo(() => loopLinkIdsFromRoute(displayResponse, effectiveGraph), [displayResponse, effectiveGraph]);
   const displayRouteInterfaceIds = useMemo(() => interfaceIdsFromPath(displayResponse), [displayResponse]);
@@ -219,14 +238,15 @@ function App() {
     nextGraph = effectiveGraph,
     nextFromInterface = fromInterface,
     nextToInterface = toInterface,
-    nextRouteMode = routeMode
+    nextRouteMode = routeMode,
+    nextTraffic?: RouteRequest["traffic"]
   ) {
     const request: RouteRequest = {
       graph: nextGraph,
       from_interface: nextFromInterface,
       to_interface: nextToInterface,
       mode: nextRouteMode,
-      traffic: buildTrafficSpec(nextGraph, nextFromInterface, nextToInterface, trafficProtocol, trafficProtocol === "icmp" ? undefined : trafficPort),
+      traffic: nextTraffic ?? buildTrafficSpec(nextGraph, nextFromInterface, nextToInterface, trafficProtocol, trafficProtocol === "icmp" ? undefined : trafficPort),
     };
 
     try {
@@ -266,6 +286,8 @@ function App() {
       setDownInterfaceIds(new Set());
       setFromInterface(firstInterface);
       setToInterface(lastInterface);
+      setManualSourceIp(interfaceHostIp(nextGraph, firstInterface));
+      setManualDestinationIp(interfaceHostIp(nextGraph, lastInterface));
       setRouteResponse(null);
       setStatus(`${file.name} を読み込みました`);
       logEvent("topology.import", { file: file.name, nodes: nextGraph.nodes.length, links: nextGraph.links.length });
@@ -406,12 +428,13 @@ function App() {
     logEvent("tests.select", { testId });
     setSelectedTrafficTestId(testId);
     setTrafficProtocol(test.protocol);
+    setManualSourceIp(test.source);
+    setManualDestinationIp(test.destination);
     if (test.protocol !== "icmp") {
       setTrafficPort(test.port ?? 443);
     }
     setExpectedReachable(test.expectations.reachable);
     setReachabilityScope(test.expectations.scope ?? "round_trip");
-    setExpectedViaNodeId("");
     try {
       const request = buildRouteRequestFromTest(effectiveGraph, test);
       setFromInterface(request.from_interface);
@@ -450,7 +473,7 @@ function App() {
     }
     setTrafficTestResults((currentResults) => ({ ...currentResults, ...nextResults }));
     const passCount = Object.values(nextResults).filter((result) => result.status === "pass").length;
-    setStatus(`通信試験 ${passCount} / ${enabledTests.length} 件 PASS`);
+    setStatus(`試験 ${passCount} / ${enabledTests.length} 件 PASS`);
     logEvent("tests.runAll.result", { pass: passCount, total: enabledTests.length });
   }
 
@@ -471,7 +494,6 @@ function App() {
         }
         setExpectedReachable(test.expectations.reachable);
         setReachabilityScope(test.expectations.scope ?? "round_trip");
-        setExpectedViaNodeId("");
         setRouteResponse(response);
       }
 
@@ -484,7 +506,7 @@ function App() {
       return {
         test_id: test.id,
         status: "error",
-        message: error instanceof Error ? error.message : "通信試験に失敗しました",
+        message: error instanceof Error ? error.message : "試験の実行に失敗しました",
       };
     }
   }
@@ -546,12 +568,14 @@ function App() {
     logEvent("route.endpoint.select", { target, interfaceId });
     if (target === "from") {
       setFromInterface(interfaceId);
+      setManualSourceIp(interfaceHostIp(effectiveGraph, interfaceId));
       setSelectionTarget("to");
       void calculateRoute(effectiveGraph, interfaceId, toInterface);
       return;
     }
 
     setToInterface(interfaceId);
+    setManualDestinationIp(interfaceHostIp(effectiveGraph, interfaceId));
     setSelectionTarget("from");
     void calculateRoute(effectiveGraph, fromInterface, interfaceId);
   }
@@ -841,22 +865,52 @@ function App() {
 
   function showManualTrafficCheck() {
     setSelectedTrafficTestId(null);
-    void calculateRoute(effectiveGraph, fromInterface, toInterface);
-    logEvent("view.trafficCheck.manualRoute", { from: fromInterface, to: toInterface });
+    runManualTrafficCheck();
+  }
+
+  function runManualTrafficCheck() {
+    const sourceIp = manualSourceIp.trim();
+    const destinationIp = manualDestinationIp.trim();
+    const sourceInterface = resolveInterfaceByIp(effectiveGraph, sourceIp);
+    const destinationInterface = resolveInterfaceByIp(effectiveGraph, destinationIp);
+
+    setSelectedTrafficTestId(null);
+    if (!sourceInterface) {
+      setStatus(`送信元IP '${sourceIp}' に一致するインターフェースがありません`);
+      return;
+    }
+    if (!destinationInterface) {
+      setStatus(`宛先IP '${destinationIp}' に一致するインターフェースがありません`);
+      return;
+    }
+
+    setFromInterface(sourceInterface.id);
+    setToInterface(destinationInterface.id);
+    void calculateRoute(
+      effectiveGraph,
+      sourceInterface.id,
+      destinationInterface.id,
+      routeMode,
+      {
+        protocol: trafficProtocol,
+        port: trafficProtocol === "icmp" ? undefined : trafficPort,
+        source: sourceIp,
+        destination: destinationIp,
+      }
+    );
+    logEvent("manualCheck.run", {
+      source: sourceIp,
+      destination: destinationIp,
+      from: sourceInterface.id,
+      to: destinationInterface.id,
+    });
   }
 
   const viewTabs = [
-    { id: "topology", label: "通信確認", icon: <Network size={16} /> },
+    { id: "topology", label: "設計確認", icon: <Network size={16} /> },
     { id: "rules", label: "ルール編集", icon: <Shield size={16} /> },
-    { id: "tests", label: "通信試験", icon: <ListChecks size={16} /> },
+    { id: "tests", label: "試験", icon: <ListChecks size={16} /> },
   ] as const;
-
-  const topologyControls = (
-    <div className="flex flex-wrap items-center justify-end gap-2">
-      <Badge tone={evaluationTone(routeDiagnosis.evaluation.result)}>{routeDiagnosis.evaluation.result}</Badge>
-      <Badge tone={causeTone(routeDiagnosis.cause.code, routeDiagnosis.evaluation.result)}>{causeCodeLabel(routeDiagnosis.cause.code)}</Badge>
-    </div>
-  );
 
   const topologyCanvas = (
     <div className="border-t border-zinc-200 bg-zinc-100/70">
@@ -869,10 +923,6 @@ function App() {
           <button className={buttonClass("secondary")} type="button" onClick={() => setActiveModal("graph")}>
             <Network size={16} />
             トポロジを編集
-          </button>
-          <button className={buttonClass("secondary")} type="button" onClick={() => setActiveModal("links")}>
-            <Cable size={16} />
-            Links
           </button>
           <label className={buttonClass("secondary")}>
             <FileJson size={16} />
@@ -940,17 +990,32 @@ function App() {
 
   const endpointAndIntentPanel = (
     <div className="grid content-start gap-3">
-      <div className="grid gap-2 sm:grid-cols-2">
-        <EndpointSummary graph={effectiveGraph} label="始点" interfaceId={fromInterface} />
-        <EndpointSummary graph={effectiveGraph} label="終点" interfaceId={toInterface} />
+      <div className="grid gap-2 md:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto]">
+        <Field label="送信元IP">
+          <SearchableEndpointSelect
+            options={endpointOptions}
+            value={manualSourceIp}
+            onChange={setManualSourceIp}
+          />
+        </Field>
+        <Field label="宛先IP">
+          <SearchableEndpointSelect
+            options={endpointOptions}
+            value={manualDestinationIp}
+            onChange={setManualDestinationIp}
+          />
+        </Field>
+        <div className="flex items-end">
+          <button className={buttonClass("success")} disabled={!manualSourceIp || !manualDestinationIp} type="button" onClick={runManualTrafficCheck}>
+            確認
+          </button>
+        </div>
       </div>
       <TrafficIntentEditor
-        graph={graph}
         protocol={trafficProtocol}
         port={trafficPort}
         expectedReachable={expectedReachable}
         reachabilityScope={reachabilityScope}
-        expectedViaNodeId={expectedViaNodeId}
         onProtocolChange={(protocol) => {
           setSelectedTrafficTestId(null);
           setTrafficProtocol(protocol);
@@ -967,45 +1032,48 @@ function App() {
           setSelectedTrafficTestId(null);
           setReachabilityScope(scope);
         }}
-        onExpectedViaNodeIdChange={(nodeId) => {
-          setSelectedTrafficTestId(null);
-          setExpectedViaNodeId(nodeId);
-        }}
       />
     </div>
   );
 
   const advancedTopologySettings = (
     <details className="border-t border-zinc-200 bg-white px-4 py-3">
-      <summary className="cursor-pointer text-xs font-semibold text-zinc-600">表示・判定設定</summary>
-      <div className="mt-3 flex flex-wrap gap-3">
-        <SegmentedControl
-          label="判定"
-          value={routeMode}
-          options={[
-            { value: "routing_table", label: "Routing Table" },
-            { value: "shortest_path", label: "Dijkstra" },
-          ]}
-          onChange={(value) => setRouteMode(value as RouteMode)}
-        />
-        <SegmentedControl
-          label="Interface"
-          value={interfaceDisplayMode}
-          options={[
-            { value: "compact", label: "簡易" },
-            { value: "detail", label: "詳細" },
-          ]}
-          onChange={(value) => setInterfaceDisplayMode(value as InterfaceDisplayMode)}
-        />
-        <SegmentedControl
-          label="Layout"
-          value={layoutDirection}
-          options={[
-            { value: "lr", label: "LR" },
-            { value: "td", label: "TD" },
-          ]}
-          onChange={(value) => changeLayoutDirection(value as LayoutDirection)}
-        />
+      <summary className="cursor-pointer text-xs font-semibold text-zinc-600">トポロジ情報と表示設定</summary>
+      <div className="mt-3 grid gap-3 lg:grid-cols-[minmax(0,0.8fr)_minmax(0,1.2fr)]">
+        <div className="flex flex-wrap items-center gap-2 text-xs font-semibold text-zinc-600">
+          <Badge tone="muted">{graph.nodes.length} nodes</Badge>
+          <Badge tone="success">{activeLinkCount} active links</Badge>
+          <Badge tone={downLinkCount ? "warn" : "muted"}>{downLinkCount} down links</Badge>
+        </div>
+        <div className="flex flex-wrap items-start gap-3">
+          <SegmentedControl
+            label="判定"
+            value={routeMode}
+            options={[
+              { value: "routing_table", label: "Routing Table" },
+              { value: "shortest_path", label: "Dijkstra" },
+            ]}
+            onChange={(value) => setRouteMode(value as RouteMode)}
+          />
+          <SegmentedControl
+            label="Interface"
+            value={interfaceDisplayMode}
+            options={[
+              { value: "compact", label: "簡易" },
+              { value: "detail", label: "詳細" },
+            ]}
+            onChange={(value) => setInterfaceDisplayMode(value as InterfaceDisplayMode)}
+          />
+          <SegmentedControl
+            label="Layout"
+            value={layoutDirection}
+            options={[
+              { value: "lr", label: "LR" },
+              { value: "td", label: "TD" },
+            ]}
+            onChange={(value) => changeLayoutDirection(value as LayoutDirection)}
+          />
+        </div>
       </div>
     </details>
   );
@@ -1059,15 +1127,18 @@ function App() {
 
         <section className="grid gap-4">
           <Card className="min-h-[560px] overflow-hidden">
-            <CardHeader title="トポロジ" action={topologyControls} />
+            <CardHeader title="トポロジ" action={<Badge tone={selectedTrafficTest ? "default" : "success"}>{displayContextLabel}</Badge>} />
             {advancedTopologySettings}
             {topologyCanvas}
+          </Card>
+
+          <Card className="overflow-hidden">
             <DecisionBanner
               diagnosis={routeDiagnosis}
-              source={selectedTrafficTest ? trafficTestTitle(effectiveGraph, selectedTrafficTest).split(" -> ")[0] ?? selectedTrafficTest.source : trafficIntent.source_node_id}
-              destination={selectedTrafficTest ? trafficTestTitle(effectiveGraph, selectedTrafficTest).split(" -> ")[1] ?? selectedTrafficTest.destination : trafficIntent.destination_node_id}
-              protocol={selectedTrafficTest ? `${selectedTrafficTest.protocol.toUpperCase()}${selectedTrafficTest.protocol === "icmp" ? "" : `/${selectedTrafficTest.port ?? 443}`}` : `${trafficProtocol.toUpperCase()}${trafficProtocol === "icmp" ? "" : `/${trafficPort}`}`}
-              sourceLabel={selectedTrafficTest ? `表示中: 試験 ${selectedTrafficTest.name || selectedTrafficTest.id}` : "表示中: 手動条件"}
+              source={displaySourceLabel}
+              destination={displayDestinationLabel}
+              protocol={displayProtocolLabel}
+              sourceLabel={displayContextLabel}
             />
           </Card>
         </section>
@@ -1095,18 +1166,15 @@ function App() {
 
         {activeView === "topology" ? (
           <section className="grid gap-4">
-            <div className="grid gap-3 md:grid-cols-4">
-              <Metric icon={<GitBranch size={18} />} label="現在のcost" value={selectedCost} />
-              <Metric icon={<Network size={18} />} label="ノード数" value={graph.nodes.length} />
-              <Metric icon={<Cable size={18} />} label="稼働中リンク" value={activeLinkCount} />
-              <Metric icon={<Zap size={18} />} label="停止中リンク" value={downLinkCount} tone="warn" />
-            </div>
             <Card>
-              <CardHeader title="通信条件" />
+              <CardHeader
+                title="手動確認"
+                description="試験ではなく、その場で送信元と宛先を変えて確認する場合に使います。"
+              />
               <div className="p-4 pt-0">{endpointAndIntentPanel}</div>
             </Card>
             <Card>
-              <CardHeader title="経路詳細" />
+              <CardHeader title="経路詳細" description={`現在のcost: ${selectedCost}`} />
               <div className="p-4 pt-0">
                 <details>
                   <summary className="cursor-pointer text-sm font-semibold text-zinc-700">routes / policy / NAT の詳細を開く</summary>
@@ -1146,7 +1214,7 @@ function App() {
         ) : (
           <section className="grid gap-4">
             <Card>
-              <CardHeader title="通信試験" />
+              <CardHeader title="試験" />
               <TrafficTestsPanel
                 graph={graph}
                 tests={trafficTests}
@@ -1157,6 +1225,7 @@ function App() {
                 onExportReport={exportTrafficTestReport}
                 onAdd={addTrafficTest}
                 onSelect={selectTrafficTest}
+                onRun={runTrafficTest}
                 onRunAll={runAllTrafficTests}
                 onOpenDetails={(testId) => {
                   setSelectedTrafficTestId(testId);
@@ -1178,16 +1247,6 @@ function App() {
                 graph={effectiveGraph}
                 link={graph.links.find((link) => link.id === selectedLinkId)}
                 onToggle={toggleLink}
-                onUpdateLink={updateLinkFromTable}
-              />
-            ) : activeModal === "links" ? (
-              <LinksPanel
-                graph={graph}
-                selectedLinkId={selectedLinkId}
-                onSelectLink={(linkId) => {
-                  setSelectedLinkId(linkId);
-                  setActiveModal("link");
-                }}
                 onUpdateLink={updateLinkFromTable}
               />
             ) : activeModal === "node" ? (
@@ -1253,6 +1312,12 @@ function App() {
                 onAddLink={addLink}
                 onUpdateNodeDeviceType={updateNodeDeviceType}
                 onUpdateNodeGroup={updateNodeGroup}
+                selectedLinkId={selectedLinkId}
+                onSelectLink={(linkId) => {
+                  setSelectedLinkId(linkId);
+                  setActiveModal("link");
+                }}
+                onUpdateLink={updateLinkFromTable}
               />
             )}
           </Modal>
@@ -1271,6 +1336,24 @@ function logEvent(event: string, payload?: Record<string, unknown>) {
   console.info(`[Pathlet] ${event}`, payload ?? {});
 }
 
+function interfaceHostIp(graph: GraphModel, interfaceId: string) {
+  return graph.interfaces.find((interfaceItem) => interfaceItem.id === interfaceId)?.ip_address?.split("/")[0] ?? "";
+}
+
+function interfaceEndpointOptions(graph: GraphModel) {
+  return graph.interfaces.flatMap((interfaceItem) => {
+    const ip = interfaceItem.ip_address?.split("/")[0];
+    if (!ip) {
+      return [];
+    }
+    return [{
+      interfaceId: interfaceItem.id,
+      ip,
+      label: `${ip} (${interfaceItem.node_id})`,
+    }];
+  });
+}
+
 function DecisionBanner({
   diagnosis,
   source,
@@ -1284,16 +1367,22 @@ function DecisionBanner({
   protocol: string;
   sourceLabel: string;
 }) {
+  const actualReachability = actualReachabilityLabel(diagnosis);
+  const nextAction = nextActionForDiagnosis(diagnosis);
   return (
     <div className={cn(
-      "grid gap-3 border-t border-zinc-200 px-4 py-4 lg:grid-cols-[minmax(0,1.1fr)_minmax(0,0.9fr)_minmax(0,1fr)]",
+      "grid gap-4 px-4 py-4 lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_minmax(0,1.1fr)]",
       diagnosis.evaluation.result === "PASS" && "bg-teal-50/70",
       diagnosis.evaluation.result === "FAIL" && "bg-red-50/80",
       diagnosis.evaluation.result === "PENDING" && "bg-zinc-50",
       diagnosis.evaluation.result === "ERROR" && "bg-red-50/80"
     )}>
-      <div>
-        <div className="text-xs font-semibold uppercase text-zinc-500">事実</div>
+      <div className="min-w-0 rounded-md border border-zinc-200 bg-white p-3">
+        <div className="text-xs font-semibold uppercase text-zinc-500">実通信</div>
+        <div className="mt-2 flex flex-wrap items-center gap-2">
+          <Badge tone={factTone(diagnosis.facts.e2e)}>{actualReachability}</Badge>
+          <span className="text-xs font-semibold text-zinc-500">actual reachability</span>
+        </div>
         <div className="mt-2 flex flex-wrap gap-2">
           <Badge tone={factTone(diagnosis.facts.e2e)}>E2E {factLabel(diagnosis.facts.e2e)}</Badge>
           <Badge tone={factTone(diagnosis.facts.forward)}>FWD {factLabel(diagnosis.facts.forward)}</Badge>
@@ -1303,8 +1392,8 @@ function DecisionBanner({
           {source} {"->"} {destination} / {protocol}
         </div>
       </div>
-      <div className="min-w-0">
-        <div className="text-xs font-semibold uppercase text-zinc-500">評価</div>
+      <div className="min-w-0 rounded-md border border-zinc-200 bg-white p-3">
+        <div className="text-xs font-semibold uppercase text-zinc-500">設計評価</div>
         <div className="mt-2 flex flex-wrap gap-2">
           <Badge tone={evaluationTone(diagnosis.evaluation.result)}>{diagnosis.evaluation.result}</Badge>
           <Badge tone={diagnosis.evaluation.expectedReachable ? "success" : "danger"}>
@@ -1312,11 +1401,12 @@ function DecisionBanner({
           </Badge>
         </div>
         <div className="mt-2 text-sm font-semibold text-zinc-800">{sourceLabel}</div>
+        <div className="mt-1 text-xs text-zinc-600">{nextAction}</div>
       </div>
-      <div className="min-w-0">
+      <div className="min-w-0 rounded-md border border-zinc-200 bg-white p-3">
         <div className="text-xs font-semibold uppercase text-zinc-500">原因</div>
         <div className="mt-2 flex flex-wrap gap-2">
-          <Badge tone={causeTone(diagnosis.cause.code, diagnosis.evaluation.result)}>{diagnosis.cause.code}</Badge>
+          <Badge tone={causeTone(diagnosis.cause.code, diagnosis.evaluation.result)}>{causeCodeLabel(diagnosis.cause.code)}</Badge>
           <Badge tone="muted">{diagnosis.cause.leg}</Badge>
         </div>
         <div className="mt-2 text-sm font-semibold text-zinc-950">{diagnosis.cause.message}</div>

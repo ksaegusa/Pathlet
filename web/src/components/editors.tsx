@@ -15,7 +15,7 @@ import {
   routeEntriesFromGraph,
 } from "../graphModel";
 import { reachabilityScopeLabel, routeStatusLabel, testResultLabel } from "../formatters";
-import { causeCodeLabel, causeTone, diagnoseTrafficTest, endpointNameForIp, evaluationTone, factLabel, factTone, shortInterfaceLabel, trafficTestTitle } from "../diagnosis";
+import { actualReachabilityLabel, causeCodeLabel, causeTone, diagnoseTrafficTest, endpointNameForIp, evaluationTone, factLabel, factTone, shortInterfaceLabel, trafficTestTitle } from "../diagnosis";
 import type {
   GraphModel,
   InterfaceModel,
@@ -33,32 +33,26 @@ import type {
   TrafficTestResultModel,
   TrafficProtocol,
 } from "../types";
-import { Badge, EmptyMessage, Field, buttonClass, cn, inputClass } from "./common";
+import { Badge, EmptyMessage, Field, SearchableEndpointSelect, buttonClass, cn, inputClass } from "./common";
 
 export function TrafficIntentEditor({
-  graph,
   protocol,
   port,
   expectedReachable,
   reachabilityScope,
-  expectedViaNodeId,
   onProtocolChange,
   onPortChange,
   onExpectedReachableChange,
   onReachabilityScopeChange,
-  onExpectedViaNodeIdChange,
 }: {
-  graph: GraphModel;
   protocol: TrafficProtocol;
   port: number;
   expectedReachable: boolean;
   reachabilityScope: ReachabilityScope;
-  expectedViaNodeId: string;
   onProtocolChange: (protocol: TrafficProtocol) => void;
   onPortChange: (port: number) => void;
   onExpectedReachableChange: (reachable: boolean) => void;
   onReachabilityScopeChange: (scope: ReachabilityScope) => void;
-  onExpectedViaNodeIdChange: (nodeId: string) => void;
 }) {
   return (
     <div className="grid gap-3 rounded-md border border-zinc-200 bg-zinc-50 p-3">
@@ -66,7 +60,7 @@ export function TrafficIntentEditor({
         <h3 className="text-xs font-semibold text-zinc-500">通信要件</h3>
         <span className="text-[11px] text-zinc-500">E2E到達性</span>
       </div>
-      <div className="grid gap-2 sm:grid-cols-[1fr_88px_1fr_1fr_1fr]">
+      <div className="grid gap-2 sm:grid-cols-[1fr_88px_1fr_1fr]">
         <label className="grid gap-1 text-xs font-semibold text-zinc-600">
           種別
           <select
@@ -111,21 +105,6 @@ export function TrafficIntentEditor({
           >
             <option value="round_trip">往復</option>
             <option value="forward_only">片道（往路のみ）</option>
-          </select>
-        </label>
-        <label className="grid gap-1 text-xs font-semibold text-zinc-600">
-          経由
-          <select
-            className={inputClass}
-            value={expectedViaNodeId}
-            onChange={(event) => onExpectedViaNodeIdChange(event.target.value)}
-          >
-            <option value="">未指定</option>
-            {graph.nodes.map((node) => (
-              <option key={node.id} value={node.id}>
-                {node.id}
-              </option>
-            ))}
           </select>
         </label>
       </div>
@@ -780,6 +759,9 @@ export function GraphEditor({
   onAddLink,
   onUpdateNodeDeviceType,
   onUpdateNodeGroup,
+  selectedLinkId,
+  onSelectLink,
+  onUpdateLink,
 }: {
   graph: GraphModel;
   newNodeId: string;
@@ -803,6 +785,9 @@ export function GraphEditor({
   onAddLink: () => void;
   onUpdateNodeDeviceType: (nodeId: string, deviceType: NodeDeviceType) => void;
   onUpdateNodeGroup: (nodeId: string, groupId: string) => void;
+  selectedLinkId: string;
+  onSelectLink: (linkId: string) => void;
+  onUpdateLink: (linkId: string, patch: Partial<LinkModel>) => void;
 }) {
   const groups = graphGroups(graph);
   return (
@@ -910,6 +895,13 @@ export function GraphEditor({
           </div>
         ))}
       </div>
+
+      <LinksPanel
+        graph={graph}
+        selectedLinkId={selectedLinkId}
+        onSelectLink={onSelectLink}
+        onUpdateLink={onUpdateLink}
+      />
 
     </div>
   );
@@ -1411,6 +1403,7 @@ export function TrafficTestsPanel({
   onExportReport,
   onAdd,
   onSelect,
+  onRun,
   onRunAll,
   onOpenDetails,
 }: {
@@ -1423,6 +1416,7 @@ export function TrafficTestsPanel({
   onExportReport: () => void;
   onAdd: () => void;
   onSelect: (testId: string) => void;
+  onRun: (testId: string) => void;
   onRunAll: () => void;
   onOpenDetails: (testId: string) => void;
 }) {
@@ -1435,6 +1429,7 @@ export function TrafficTestsPanel({
   const [query, setQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState<"all" | "pending" | "pass" | "fail" | "error">("all");
   const selectedTest = tests.find((test) => test.id === selectedTestId) ?? tests[0];
+  const endpointIpSet = new Set(interfaceEndpointOptions(graph).map((endpoint) => endpoint.ip));
   const normalizedQuery = query.trim().toLowerCase();
   const visibleTests = tests.filter((test) => {
     const result = results[test.id];
@@ -1458,9 +1453,9 @@ export function TrafficTestsPanel({
     <div className="grid gap-4 p-4">
       <div className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-zinc-200 bg-zinc-50 p-3">
         <div>
-          <h3 className="text-sm font-semibold text-zinc-950">通信試験</h3>
+          <h3 className="text-sm font-semibold text-zinc-950">試験</h3>
           <p className="mt-1 text-xs text-zinc-500">
-            {enabledCount} / {tests.length} tests enabled
+            {enabledCount} / {tests.length} 件を実行対象にします
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
@@ -1519,25 +1514,32 @@ export function TrafficTestsPanel({
           </div>
           <div className="max-h-[620px] overflow-auto rounded-lg border border-zinc-200 bg-white">
             {visibleTests.length ? (
-              <div className="min-w-[760px] divide-y divide-zinc-100">
+              <div className="min-w-[980px] divide-y divide-zinc-100">
                 {visibleTests.map((test) => {
                   const result = results[test.id];
                   const diagnosis = diagnoseTrafficTest(result, test);
                   const protocol = test.port ? `${test.protocol.toUpperCase()}/${test.port}` : test.protocol.toUpperCase();
                   const selected = selectedTest?.id === test.id;
+                  const endpointsExist = endpointIpSet.has(test.source) && endpointIpSet.has(test.destination);
                   return (
-                    <button
+                    <div
                       className={cn(
-                        "grid w-full grid-cols-[96px_minmax(220px,1fr)_100px_120px_110px] items-center gap-3 px-3 py-2 text-left transition hover:bg-zinc-50",
+                        "grid w-full grid-cols-[92px_minmax(220px,1fr)_96px_112px_112px_132px_132px] items-center gap-3 px-3 py-2 text-left transition hover:bg-zinc-50",
                         selected && "bg-teal-50",
                         result?.status === "fail" && "bg-red-50/50",
                         result?.status === "error" && "bg-red-50/50"
                       )}
                       key={test.id}
-                      type="button"
+                      role="button"
+                      tabIndex={0}
                       onClick={() => {
                         onSelect(test.id);
-                        onOpenDetails(test.id);
+                      }}
+                      onKeyDown={(event) => {
+                        if (event.key === "Enter" || event.key === " ") {
+                          event.preventDefault();
+                          onSelect(test.id);
+                        }
                       }}
                     >
                       <div><Badge tone={resultTone(result)}>{result ? testResultLabel(result.status) : "未実行"}</Badge></div>
@@ -1547,8 +1549,38 @@ export function TrafficTestsPanel({
                       </div>
                       <div className="text-xs font-semibold text-zinc-700">{protocol}</div>
                       <div><Badge tone={test.expectations.reachable ? "success" : "danger"}>{test.expectations.reachable ? "期待OK" : "期待NG"}</Badge></div>
-                      <div className="min-w-0"><Badge tone={causeTone(diagnosis.cause.code, diagnosis.evaluation.result)}>{causeCodeLabel(diagnosis.cause.code)}</Badge></div>
-                    </button>
+                      <div><Badge tone={factTone(diagnosis.facts.e2e)}>{actualReachabilityLabel(diagnosis)}</Badge></div>
+                      <div className="min-w-0">
+                        <Badge tone={endpointsExist ? causeTone(diagnosis.cause.code, diagnosis.evaluation.result) : "danger"}>
+                          {endpointsExist ? causeCodeLabel(diagnosis.cause.code) : "UNKNOWN_IP"}
+                        </Badge>
+                      </div>
+                      <div className="flex justify-end gap-2">
+                        <button
+                          className={buttonClass("success")}
+                          disabled={!endpointsExist}
+                          type="button"
+                          onClick={(event) => {
+                            event.stopPropagation();
+                            onSelect(test.id);
+                            onRun(test.id);
+                          }}
+                        >
+                          実行
+                        </button>
+                        <button
+                          className={buttonClass("secondary")}
+                          type="button"
+                          onClick={(event) => {
+                            event.stopPropagation();
+                            onSelect(test.id);
+                            onOpenDetails(test.id);
+                          }}
+                        >
+                          詳細
+                        </button>
+                      </div>
+                    </div>
                   );
                 })}
               </div>
@@ -1558,7 +1590,7 @@ export function TrafficTestsPanel({
           </div>
         </div>
       ) : (
-        <EmptyMessage>通信試験はありません。試験を追加するか、試験JSON/YAMLを読み込んでください。</EmptyMessage>
+        <EmptyMessage>試験はありません。試験を追加するか、試験JSON/YAMLを読み込んでください。</EmptyMessage>
       )}
     </div>
   );
@@ -1621,6 +1653,10 @@ function TrafficTestEditor({
   test: TrafficTestRecordModel;
   onUpdate: (testId: string, patch: Partial<TrafficTestRecordModel>) => void;
 }) {
+  const endpointOptions = interfaceEndpointOptions(graph);
+  const sourceExists = endpointOptions.some((endpoint) => endpoint.ip === test.source);
+  const destinationExists = endpointOptions.some((endpoint) => endpoint.ip === test.destination);
+
   return (
     <div className="grid gap-3 rounded-md border border-zinc-200 bg-zinc-50 p-3">
       <div className="flex flex-wrap items-center justify-between gap-2">
@@ -1633,9 +1669,26 @@ function TrafficTestEditor({
       <div className="grid gap-2 md:grid-cols-4">
         <Field label="id"><input className={inputClass} value={test.id} readOnly /></Field>
         <Field label="name"><input className={inputClass} placeholder={test.id} value={test.name ?? ""} onChange={(event) => onUpdate(test.id, { name: event.target.value })} /></Field>
-        <Field label="source IP"><input className={inputClass} value={test.source} onChange={(event) => onUpdate(test.id, { source: event.target.value })} /></Field>
-        <Field label="destination IP"><input className={inputClass} value={test.destination} onChange={(event) => onUpdate(test.id, { destination: event.target.value })} /></Field>
+        <Field label="source IP">
+          <SearchableEndpointSelect
+            options={endpointOptions}
+            value={test.source}
+            onChange={(source) => onUpdate(test.id, { source })}
+          />
+        </Field>
+        <Field label="destination IP">
+          <SearchableEndpointSelect
+            options={endpointOptions}
+            value={test.destination}
+            onChange={(destination) => onUpdate(test.id, { destination })}
+          />
+        </Field>
       </div>
+      {!sourceExists || !destinationExists ? (
+        <div className="rounded-md border border-red-200 bg-red-50 px-3 py-2 text-xs font-semibold text-red-700">
+          この試験には現在のトポロジに存在しないIPが含まれています。送信元/宛先を選び直してください。
+        </div>
+      ) : null}
       <div className="grid gap-2 md:grid-cols-4">
         <Field label="protocol">
           <select className={inputClass} value={test.protocol} onChange={(event) => onUpdate(test.id, { protocol: event.target.value as TrafficProtocol, port: event.target.value === "icmp" ? undefined : test.port })}>
@@ -1763,6 +1816,20 @@ function DetailItem({ label, value }: { label: string; value: string }) {
       <span className="min-w-0 break-words font-mono text-zinc-600">{value}</span>
     </div>
   );
+}
+
+function interfaceEndpointOptions(graph: GraphModel) {
+  return graph.interfaces.flatMap((interfaceItem) => {
+    const ip = interfaceItem.ip_address?.split("/")[0];
+    if (!ip) {
+      return [];
+    }
+    return [{
+      interfaceId: interfaceItem.id,
+      ip,
+      label: `${ip} (${interfaceItem.node_id})`,
+    }];
+  });
 }
 
 function GroupSelect({

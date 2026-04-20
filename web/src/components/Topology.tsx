@@ -167,7 +167,7 @@ export function Topology({
           <text
             className="topology-group-label"
             x={group.x + 10}
-            y={group.y - 8}
+            y={group.y + 16}
           >
             {group.label}
           </text>
