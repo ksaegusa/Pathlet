@@ -1,4 +1,4 @@
-import type { ReactNode } from "react";
+import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { clsx, type ClassValue } from "clsx";
 import { twMerge } from "tailwind-merge";
 import type { GraphModel } from "../types";
@@ -80,6 +80,98 @@ export function Field({ label, children }: { label: string; children: ReactNode 
       {label}
       {children}
     </label>
+  );
+}
+
+export type EndpointOption = {
+  interfaceId: string;
+  ip: string;
+  label: string;
+};
+
+export function SearchableEndpointSelect({
+  value,
+  options,
+  placeholder = "IPまたはノード名で検索",
+  onChange,
+}: {
+  value: string;
+  options: EndpointOption[];
+  placeholder?: string;
+  onChange: (ip: string) => void;
+}) {
+  const selectedOption = options.find((option) => option.ip === value);
+  const [query, setQuery] = useState(selectedOption?.label ?? value);
+  const [open, setOpen] = useState(false);
+  const normalizedQuery = query.trim().toLowerCase();
+  const filteredOptions = useMemo(
+    () =>
+      options
+        .filter((option) =>
+          !normalizedQuery ||
+          option.ip.toLowerCase().includes(normalizedQuery) ||
+          option.label.toLowerCase().includes(normalizedQuery)
+        )
+        .slice(0, 30),
+    [normalizedQuery, options]
+  );
+
+  useEffect(() => {
+    setQuery(selectedOption?.label ?? value);
+  }, [selectedOption?.label, value]);
+
+  function selectOption(option: EndpointOption) {
+    onChange(option.ip);
+    setQuery(option.label);
+    setOpen(false);
+  }
+
+  function resetQuery() {
+    setQuery(selectedOption?.label ?? value);
+    setOpen(false);
+  }
+
+  return (
+    <div className="relative">
+      <input
+        className={inputClass}
+        placeholder={placeholder}
+        value={query}
+        onBlur={resetQuery}
+        onChange={(event) => {
+          const nextQuery = event.target.value;
+          setQuery(nextQuery);
+          setOpen(true);
+          const exactOption = options.find((option) => option.ip === nextQuery.trim());
+          if (exactOption) {
+            onChange(exactOption.ip);
+          }
+        }}
+        onFocus={() => setOpen(true)}
+      />
+      {open ? (
+        <div className="absolute z-20 mt-1 max-h-64 w-full overflow-auto rounded-md border border-zinc-200 bg-white p-1 shadow-lg">
+          {filteredOptions.length ? (
+            filteredOptions.map((option) => (
+              <button
+                className="block w-full rounded px-2 py-2 text-left text-xs hover:bg-zinc-100"
+                key={option.interfaceId}
+                type="button"
+                onMouseDown={(event) => {
+                  event.preventDefault();
+                  selectOption(option);
+                }}
+              >
+                <span className="font-mono font-semibold text-zinc-950">{option.ip}</span>
+                <span className="ml-2 text-zinc-500">{option.label.replace(option.ip, "").trim()}</span>
+              </button>
+            ))
+          ) : (
+            <div className="px-2 py-2 text-xs text-zinc-500">一致するIPはありません。</div>
+          )}
+        </div>
+      ) : null}
+    </div>
   );
 }
 

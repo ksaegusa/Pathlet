@@ -35,6 +35,44 @@ export type RouteDiagnosis = {
   };
 };
 
+export function actualReachabilityLabel(diagnosis: RouteDiagnosis) {
+  if (diagnosis.facts.e2e === "pass") {
+    return "REACHABLE";
+  }
+  if (diagnosis.facts.e2e === "fail") {
+    return "BLOCKED";
+  }
+  return "NOT CHECKED";
+}
+
+export function nextActionForDiagnosis(diagnosis: RouteDiagnosis) {
+  if (diagnosis.evaluation.result === "PENDING") {
+    return "試験または手動確認を実行してください";
+  }
+  if (diagnosis.evaluation.result === "ERROR") {
+    return "入力値またはトポロジデータを確認してください";
+  }
+  if (diagnosis.evaluation.result === "PASS" && diagnosis.facts.e2e === "fail") {
+    return "到達不可の設計として期待通りです。必要なら原因箇所だけ確認してください";
+  }
+  if (diagnosis.evaluation.result === "PASS") {
+    return "期待通りに到達しています";
+  }
+  if (diagnosis.cause.code === "POLICY_DENY") {
+    return "該当Policyのaction、direction、interfaceを確認してください";
+  }
+  if (diagnosis.cause.code === "REV_ROUTE_MISSING") {
+    return "戻り方向のRoutingまたはNAT戻しを確認してください";
+  }
+  if (diagnosis.cause.code === "NO_ROUTE") {
+    return "該当ノードの宛先ルートとnext-hopを確認してください";
+  }
+  if (diagnosis.cause.code === "LOOP") {
+    return "同じ宛先に対するnext-hopの循環を確認してください";
+  }
+  return "Routing、Policy、NATの順に該当設定を確認してください";
+}
+
 export function diagnoseRoute(response: RouteResponse | null, intent: TrafficIntent): RouteDiagnosis {
   if (!response) {
     return pendingDiagnosis(intent.expectations.reachable);
@@ -125,17 +163,20 @@ export function evaluationTone(result: EvaluationResult): "success" | "danger" |
 
 export function factLabel(fact: ReachabilityFact) {
   if (fact === "pass") {
-    return "reachable";
+    return "REACHABLE";
   }
   if (fact === "fail") {
-    return "blocked";
+    return "BLOCKED";
   }
-  return "n/a";
+  return "N/A";
 }
 
 export function factTone(fact: ReachabilityFact): "success" | "danger" | "muted" {
   if (fact === "pass") {
     return "success";
+  }
+  if (fact === "fail") {
+    return "danger";
   }
   return "muted";
 }
@@ -242,7 +283,7 @@ function pendingDiagnosis(expectedReachable: boolean): RouteDiagnosis {
   return {
     facts: { e2e: "not_checked", forward: "not_checked", reverse: "not_checked" },
     evaluation: { expectedReachable, result: "PENDING" },
-    cause: { code: "PENDING", leg: "none", message: "判定待ち", evidence: "試験または通信条件を実行すると表示します" },
+    cause: { code: "PENDING", leg: "none", message: "判定待ち", evidence: "試験または手動確認を実行すると表示します" },
   };
 }
 
@@ -298,19 +339,19 @@ function messageFor(code: CauseCode, failedLeg: RouteDiagnosis["cause"]["leg"], 
     return "判定待ち";
   }
   if (code === "REV_ROUTE_MISSING") {
-    return "復路の経路が不足しています";
+    return "復路の経路が不足";
   }
   if (code === "POLICY_DENY") {
-    return `${legLabel(failedLeg)}でPolicy denyに一致しています`;
+    return `${legLabel(failedLeg)}でPolicy拒否`;
   }
   if (code === "NO_ROUTE") {
-    return `${legLabel(failedLeg)}の次ホップが見つかりません`;
+    return `${legLabel(failedLeg)}の次ホップなし`;
   }
   if (code === "LOOP") {
-    return `${legLabel(failedLeg)}でループしています`;
+    return `${legLabel(failedLeg)}でループ`;
   }
   if (code === "BLACKHOLE") {
-    return `${legLabel(failedLeg)}でblackhole routeに一致しています`;
+    return `${legLabel(failedLeg)}でblackhole`;
   }
   if (code === "EXPECTATION_MISMATCH") {
     return "期待結果と実際の到達性が違います";

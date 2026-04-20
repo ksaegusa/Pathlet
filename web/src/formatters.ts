@@ -49,7 +49,7 @@ export function modalTitle(activeModal: ActiveModal) {
     return "ノード詳細";
   }
   if (activeModal === "test") {
-    return "通信試験詳細";
+    return "試験詳細";
   }
   return "トポロジ編集";
 }

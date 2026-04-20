@@ -321,7 +321,7 @@ export function nodeLabelLines(nodeId: string) {
 }
 
 function shortenNodeLabel(label: string) {
-  const maxLength = 8;
+  const maxLength = 6;
   if (label.length <= maxLength) {
     return label;
   }
