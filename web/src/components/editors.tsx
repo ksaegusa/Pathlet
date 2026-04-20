@@ -780,6 +780,9 @@ export function GraphEditor({
   onAddLink,
   onUpdateNodeDeviceType,
   onUpdateNodeGroup,
+  selectedLinkId,
+  onSelectLink,
+  onUpdateLink,
 }: {
   graph: GraphModel;
   newNodeId: string;
@@ -803,6 +806,9 @@ export function GraphEditor({
   onAddLink: () => void;
   onUpdateNodeDeviceType: (nodeId: string, deviceType: NodeDeviceType) => void;
   onUpdateNodeGroup: (nodeId: string, groupId: string) => void;
+  selectedLinkId: string;
+  onSelectLink: (linkId: string) => void;
+  onUpdateLink: (linkId: string, patch: Partial<LinkModel>) => void;
 }) {
   const groups = graphGroups(graph);
   return (
@@ -910,6 +916,13 @@ export function GraphEditor({
           </div>
         ))}
       </div>
+
+      <LinksPanel
+        graph={graph}
+        selectedLinkId={selectedLinkId}
+        onSelectLink={onSelectLink}
+        onUpdateLink={onUpdateLink}
+      />
 
     </div>
   );

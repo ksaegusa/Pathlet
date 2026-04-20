@@ -255,7 +255,7 @@ export type RouteMode = "shortest_path" | "routing_table";
 export type RouteStatus = "reachable" | "unreachable" | "loop" | "no_route" | "blackhole" | "policy_denied";
 export type ReachabilityScope = "round_trip" | "forward_only";
 export type InterfaceDisplayMode = "compact" | "detail";
-export type ActiveModal = "link" | "links" | "graph" | "node" | "test";
+export type ActiveModal = "link" | "graph" | "node" | "test";
 
 export type TrafficIntent = {
   source_node_id: string;

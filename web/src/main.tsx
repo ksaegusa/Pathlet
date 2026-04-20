@@ -3,7 +3,7 @@ import { createRoot } from "react-dom/client";
 import { Cable, FileDown, FileJson, GitBranch, ListChecks, Network, Shield, Zap } from "lucide-react";
 import { stringify as stringifyYaml } from "yaml";
 import { Badge, Card, CardHeader, EndpointSummary, Metric, Modal, buttonClass, cn } from "./components/common";
-import { GraphEditor, LinksPanel, NatPanel, NodeDetailsPanel, PolicyPanel, RoutingPanel, SelectedLinkPanel, TrafficIntentEditor, TrafficTestDetailPanel, TrafficTestsPanel } from "./components/editors";
+import { GraphEditor, NatPanel, NodeDetailsPanel, PolicyPanel, RoutingPanel, SelectedLinkPanel, TrafficIntentEditor, TrafficTestDetailPanel, TrafficTestsPanel } from "./components/editors";
 import { RouteDetails } from "./components/RouteDetails";
 import { Topology } from "./components/Topology";
 import { exampleGraph, exampleTrafficTests } from "./exampleGraph";
@@ -870,10 +870,6 @@ function App() {
             <Network size={16} />
             トポロジを編集
           </button>
-          <button className={buttonClass("secondary")} type="button" onClick={() => setActiveModal("links")}>
-            <Cable size={16} />
-            Links
-          </button>
           <label className={buttonClass("secondary")}>
             <FileJson size={16} />
             JSON/YAMLを読み込む
@@ -1180,16 +1176,6 @@ function App() {
                 onToggle={toggleLink}
                 onUpdateLink={updateLinkFromTable}
               />
-            ) : activeModal === "links" ? (
-              <LinksPanel
-                graph={graph}
-                selectedLinkId={selectedLinkId}
-                onSelectLink={(linkId) => {
-                  setSelectedLinkId(linkId);
-                  setActiveModal("link");
-                }}
-                onUpdateLink={updateLinkFromTable}
-              />
             ) : activeModal === "node" ? (
               <NodeDetailsPanel
                 graph={effectiveGraph}
@@ -1253,6 +1239,12 @@ function App() {
                 onAddLink={addLink}
                 onUpdateNodeDeviceType={updateNodeDeviceType}
                 onUpdateNodeGroup={updateNodeGroup}
+                selectedLinkId={selectedLinkId}
+                onSelectLink={(linkId) => {
+                  setSelectedLinkId(linkId);
+                  setActiveModal("link");
+                }}
+                onUpdateLink={updateLinkFromTable}
               />
             )}
           </Modal>

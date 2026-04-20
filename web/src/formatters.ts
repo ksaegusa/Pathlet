@@ -45,9 +45,6 @@ export function modalTitle(activeModal: ActiveModal) {
   if (activeModal === "link") {
     return "リンク編集";
   }
-  if (activeModal === "links") {
-    return "Links";
-  }
   if (activeModal === "node") {
     return "ノード詳細";
   }
