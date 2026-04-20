@@ -73,10 +73,19 @@ select {
   stroke: #a1a1aa;
 }
 
+.topology-link.context {
+  opacity: 0.07;
+  stroke-width: 2;
+}
+
 .topology-link.route {
   filter: drop-shadow(0 0 7px rgb(16 185 129 / 0.45));
   stroke: #10b981;
   stroke-width: 11;
+}
+
+.topology.density-crowded .topology-link.route {
+  stroke-width: 7;
 }
 
 .topology-link.loop {
@@ -90,6 +99,10 @@ select {
   filter: drop-shadow(0 0 8px rgb(16 185 129 / 0.85));
   stroke: #047857;
   stroke-width: 2;
+}
+
+.topology.density-crowded .route-packet {
+  stroke-width: 1.5;
 }
 
 .node {
@@ -158,6 +171,11 @@ select {
   filter: none;
 }
 
+.node.context {
+  opacity: 0.28;
+  stroke-width: 1.5;
+}
+
 .node-label {
   cursor: grab;
   font-size: 10px;
@@ -170,7 +188,7 @@ select {
 }
 
 .topology.density-crowded .node-label {
-  font-size: 7px;
+  font-size: 6px;
 }
 
 .node-label.dimmed {

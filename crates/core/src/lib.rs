@@ -1,6 +1,8 @@
 use serde::{Deserialize, Serialize};
 use std::cmp::Ordering;
 use std::collections::{BinaryHeap, HashMap, HashSet};
+
+const MAX_EQUAL_COST_PATHS: usize = 64;
 use std::net::Ipv4Addr;
 
 mod ip;
@@ -1661,6 +1663,10 @@ fn reconstruct_paths(
         visited: &mut HashSet<String>,
         paths: &mut Vec<Vec<String>>,
     ) {
+        if paths.len() >= MAX_EQUAL_COST_PATHS {
+            return;
+        }
+
         if current == from_interface {
             let mut completed = path.clone();
             completed.reverse();
@@ -1672,6 +1678,9 @@ fn reconstruct_paths(
             return;
         };
         for predecessor in predecessors {
+            if paths.len() >= MAX_EQUAL_COST_PATHS {
+                break;
+            }
             if visited.contains(predecessor) {
                 continue;
             }
@@ -1849,6 +1858,34 @@ mod tests {
                 vec!["r1-eth0", "r3-eth0"],
             ]
         );
+    }
+
+    #[test]
+    fn shortest_path_caps_equal_cost_paths() {
+        let mut adjacency = AdjacencyList::new();
+        adjacency.insert("start".into(), vec![("l1-a".into(), 1), ("l1-b".into(), 1)]);
+
+        for layer in 1..8 {
+            for side in ["a", "b"] {
+                adjacency.insert(
+                    format!("l{layer}-{side}"),
+                    vec![
+                        (format!("l{}-a", layer + 1), 1),
+                        (format!("l{}-b", layer + 1), 1),
+                    ],
+                );
+            }
+        }
+
+        adjacency.insert("l8-a".into(), vec![("end".into(), 1)]);
+        adjacency.insert("l8-b".into(), vec![("end".into(), 1)]);
+        adjacency.insert("end".into(), vec![]);
+
+        let route = shortest_path(&adjacency, "start", "end").unwrap();
+
+        assert_eq!(route.status, RouteStatus::Reachable);
+        assert_eq!(route.cost, 9);
+        assert_eq!(route.equal_cost_paths.len(), MAX_EQUAL_COST_PATHS);
     }
 
     #[test]

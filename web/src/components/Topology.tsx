@@ -61,6 +61,7 @@ export function Topology({
   const hasRoute = routeNodeIds.size > 0;
   const nodeRadius = layout.density === "crowded" ? 16 : layout.density === "dense" ? 21 : 26;
   const interfaceRadius = layout.density === "crowded" ? 4 : 6;
+  const routePacketRadius = layout.density === "crowded" ? 3 : 5;
   const nodeChipWidth = layout.density === "crowded" ? 54 : 58;
   const renderedHeight = Math.min(860, Math.max(layout.engine === "elk" ? 380 : 520, layout.height * 0.78));
   const groupBounds = groups.flatMap((group) => {
@@ -205,7 +206,8 @@ export function Topology({
                 link.active ? "active" : "inactive",
                 isRoute && "route",
                 isLoop && "loop",
-                isDimmed && "dimmed"
+                isDimmed && "dimmed",
+                layout.density === "crowded" && isDimmed && "context"
               )}
               d={geometry.path}
               onClick={() => {
@@ -213,7 +215,7 @@ export function Topology({
               }}
             />
             {isRoute ? (
-              <circle className="route-packet" r="5">
+              <circle className="route-packet" r={routePacketRadius}>
                 <animateMotion dur="1.6s" path={routeGeometry.path} repeatCount="indefinite" />
               </circle>
             ) : null}
@@ -238,18 +240,28 @@ export function Topology({
         const isDimmed = hasRoute && !routeNodeIds.has(node.id) && !isEndpointNode;
         const isClientNode = nodeDeviceType(node) === "client";
         const nodeState = nodeStates.get(node.id);
+        const contextNode = layout.density === "crowded" && isDimmed;
+        const renderedNodeRadius = contextNode ? 7 : nodeRadius;
         const showNodeLabel =
           layout.density !== "crowded" ||
           Boolean(nodeState) ||
           isEndpointNode ||
           routeNodeIds.has(node.id);
+        const showNodeStateChip =
+          Boolean(nodeState) &&
+          (layout.density !== "crowded" ||
+            nodeState === "SOURCE" ||
+            nodeState === "GOAL" ||
+            nodeState === "AFFECTED" ||
+            nodeState === "STOP");
         const nodeShapeClassName = cn(
           "node",
           `group-${sanitizeClassName(nodeGroupId(node))}`,
           nodeState && `state-${nodeState.toLowerCase()}`,
           draggingNodeId === node.id && "dragging",
           nodeDown && "down",
-          isDimmed && "dimmed"
+          isDimmed && "dimmed",
+          contextNode && "context"
         );
         const nodeHandlers = {
           onClick: () => selectNodeUnlessDragged(node.id),
@@ -264,17 +276,17 @@ export function Topology({
                 className={nodeShapeClassName}
                 cx={point.x}
                 cy={point.y}
-                r={nodeRadius}
+                r={renderedNodeRadius}
                 {...nodeHandlers}
               />
             ) : (
               <rect
                 className={nodeShapeClassName}
-                height={nodeRadius * 2}
+                height={renderedNodeRadius * 2}
                 rx="6"
-                width={nodeRadius * 2}
-                x={point.x - nodeRadius}
-                y={point.y - nodeRadius}
+                width={renderedNodeRadius * 2}
+                x={point.x - renderedNodeRadius}
+                y={point.y - renderedNodeRadius}
                 {...nodeHandlers}
               />
             )}
@@ -301,17 +313,17 @@ export function Topology({
                 ))}
               </text>
             ) : null}
-            {nodeState ? (
+            {showNodeStateChip && nodeState ? (
               <g>
                 <rect
                   className={cn("node-state-chip", `state-${nodeState.toLowerCase()}`)}
                   x={point.x - nodeChipWidth / 2}
-                  y={point.y + nodeRadius + 10}
+                  y={point.y + renderedNodeRadius + 10}
                   width={nodeChipWidth}
                   height="18"
                   rx="5"
                 />
-                <text className="node-state-label" x={point.x} y={point.y + nodeRadius + 23}>
+                <text className="node-state-label" x={point.x} y={point.y + renderedNodeRadius + 23}>
                   {nodeStateLabel(nodeState)}
                 </text>
               </g>

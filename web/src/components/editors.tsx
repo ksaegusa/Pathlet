@@ -665,7 +665,15 @@ export function NodeDetailsPanel({
                   {interfaceDown ? "down" : "up"}
                 </Badge>
               </div>
-              <div className="grid gap-2 sm:grid-cols-2">
+              <div className="grid gap-2 sm:grid-cols-3">
+                <Field label="IP address">
+                  <input
+                    className={inputClass}
+                    placeholder="192.0.2.1/24"
+                    value={interfaceItem.ip_address ?? ""}
+                    onChange={(event) => onUpdateInterface(interfaceItem.id, { ip_address: event.target.value || undefined })}
+                  />
+                </Field>
                 <Field label="VRF">
                   <input
                     className={inputClass}

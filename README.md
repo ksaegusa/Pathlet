@@ -381,6 +381,7 @@ Web UI の `JSON/YAMLを読み込む` から `GraphModel` 形式または `Route
 - [examples/topologies/dual-dc-vrrp.json](examples/topologies/dual-dc-vrrp.json)
 - [examples/topologies/campus-fw-internet.json](examples/topologies/campus-fw-internet.json)
 - [examples/topologies/multi-region-vrrp.json](examples/topologies/multi-region-vrrp.json)
+- [examples/topologies/large-enterprise-80.json](examples/topologies/large-enterprise-80.json) は 80 nodes / 115 links / 230 interfaces の描画・検索確認用サンプルです。
 - [examples/topologies/yang-json-minimal.json](examples/topologies/yang-json-minimal.json) は YANG JSON 風の namespace 付き JSON と `pathlet:*` 拡張の最小例です。
 
 主要フィールド:

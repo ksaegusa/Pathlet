@@ -101,6 +101,10 @@ export function SearchableEndpointSelect({
   onChange: (ip: string) => void;
 }) {
   const selectedOption = options.find((option) => option.ip === value);
+  const optionKey = useMemo(
+    () => options.map((option) => `${option.interfaceId}:${option.ip}`).join("|"),
+    [options]
+  );
   const [query, setQuery] = useState(selectedOption?.label ?? value);
   const [open, setOpen] = useState(false);
   const normalizedQuery = query.trim().toLowerCase();
@@ -118,7 +122,7 @@ export function SearchableEndpointSelect({
 
   useEffect(() => {
     setQuery(selectedOption?.label ?? value);
-  }, [selectedOption?.label, value]);
+  }, [optionKey, selectedOption?.label, value]);
 
   function selectOption(option: EndpointOption) {
     onChange(option.ip);

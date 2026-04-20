@@ -288,6 +288,7 @@ function App() {
       setToInterface(lastInterface);
       setManualSourceIp(interfaceHostIp(nextGraph, firstInterface));
       setManualDestinationIp(interfaceHostIp(nextGraph, lastInterface));
+      setSelectedTrafficTestId(null);
       setRouteResponse(null);
       setStatus(`${file.name} を読み込みました`);
       logEvent("topology.import", { file: file.name, nodes: nextGraph.nodes.length, links: nextGraph.links.length });
@@ -884,6 +885,7 @@ function App() {
       return;
     }
 
+    setSelectedTrafficTestId(null);
     setFromInterface(sourceInterface.id);
     setToInterface(destinationInterface.id);
     void calculateRoute(
@@ -995,14 +997,20 @@ function App() {
           <SearchableEndpointSelect
             options={endpointOptions}
             value={manualSourceIp}
-            onChange={setManualSourceIp}
+            onChange={(sourceIp) => {
+              setSelectedTrafficTestId(null);
+              setManualSourceIp(sourceIp);
+            }}
           />
         </Field>
         <Field label="宛先IP">
           <SearchableEndpointSelect
             options={endpointOptions}
             value={manualDestinationIp}
-            onChange={setManualDestinationIp}
+            onChange={(destinationIp) => {
+              setSelectedTrafficTestId(null);
+              setManualDestinationIp(destinationIp);
+            }}
           />
         </Field>
         <div className="flex items-end">
@@ -1053,7 +1061,10 @@ function App() {
               { value: "routing_table", label: "Routing Table" },
               { value: "shortest_path", label: "Dijkstra" },
             ]}
-            onChange={(value) => setRouteMode(value as RouteMode)}
+            onChange={(value) => {
+              setSelectedTrafficTestId(null);
+              setRouteMode(value as RouteMode);
+            }}
           />
           <SegmentedControl
             label="Interface"
