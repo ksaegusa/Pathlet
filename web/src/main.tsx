@@ -1421,10 +1421,43 @@ function DecisionBanner({
           <Badge tone="muted">{diagnosis.cause.leg}</Badge>
         </div>
         <div className="mt-2 text-sm font-semibold text-zinc-950">{diagnosis.cause.message}</div>
-        <div className="mt-1 break-words font-mono text-xs text-zinc-600">{diagnosis.cause.evidence}</div>
+        <EvidenceList evidence={diagnosis.cause.evidence} />
       </div>
     </div>
   );
+}
+
+function EvidenceList({ evidence }: { evidence: string }) {
+  const items = parseEvidence(evidence);
+  if (!items.length) {
+    return null;
+  }
+
+  return (
+    <div className="mt-2 grid gap-1 text-xs">
+      {items.map((item) => (
+        <div className="grid gap-1 sm:grid-cols-[4rem_minmax(0,1fr)]" key={item.label}>
+          <span className="font-semibold uppercase text-zinc-500">{item.label}</span>
+          <span className="min-w-0 break-words font-mono text-zinc-700">{item.value}</span>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function parseEvidence(evidence: string) {
+  const parts = evidence.split(" / ");
+  if (parts.length < 2) {
+    return evidence ? [{ label: "detail", value: evidence }] : [];
+  }
+
+  return parts.map((part) => {
+    const [label, ...valueParts] = part.split(" ");
+    return {
+      label,
+      value: valueParts.join(" ") || "-",
+    };
+  });
 }
 
 function SegmentedControl({

@@ -137,7 +137,7 @@ function RouteDecisionSummary({
         <SummaryRow label="往路" value={forwardNodes.length ? forwardNodes.join(" -> ") : "経路情報なし"} />
         {intent.expectations.scope === "forward_only" ? null : response.return_path ? <SummaryRow label="復路" value={returnNodes.length ? returnNodes.join(" -> ") : "経路情報なし"} /> : null}
         <SummaryRow label="理由" value={decisionHeadline} />
-        <SummaryRow label="参照情報" value={routeEvidenceSummary(response)} />
+        <SummaryEvidenceRows label="参照情報" items={routeEvidenceSummary(response)} />
       </div>
       {intent.expectations.scope !== "forward_only" && isReturnFailure ? (
         <p className={`mt-2 ${textClass}`}>
@@ -192,6 +192,22 @@ function SummaryRow({ label, value }: { label: string; value: string }) {
     <div className="grid gap-1 text-xs sm:grid-cols-[5rem_minmax(0,1fr)]">
       <span className="font-semibold text-zinc-700">{label}</span>
       <span className="min-w-0 break-words font-mono text-zinc-700">{value}</span>
+    </div>
+  );
+}
+
+function SummaryEvidenceRows({ label, items }: { label: string; items: EvidenceItem[] }) {
+  return (
+    <div className="grid gap-1 text-xs sm:grid-cols-[5rem_minmax(0,1fr)]">
+      <span className="font-semibold text-zinc-700">{label}</span>
+      <div className="grid min-w-0 gap-1">
+        {items.map((item) => (
+          <div className="grid gap-1 sm:grid-cols-[4rem_minmax(0,1fr)]" key={item.label}>
+            <span className="font-semibold uppercase text-zinc-500">{item.label}</span>
+            <span className="min-w-0 break-words font-mono text-zinc-700">{item.value}</span>
+          </div>
+        ))}
+      </div>
     </div>
   );
 }
@@ -279,7 +295,12 @@ function pipelineAddressSummary(leg: PipelineLeg) {
   return `source ${leg.source_before ?? "-"} -> ${leg.source_after ?? "-"} / destination ${leg.destination_before ?? "-"} -> ${leg.destination_after ?? "-"}`;
 }
 
-function routeEvidenceSummary(response: Extract<RouteResponse, { ok: true }>) {
+type EvidenceItem = {
+  label: "routes" | "policy" | "NAT";
+  value: string;
+};
+
+function routeEvidenceSummary(response: Extract<RouteResponse, { ok: true }>): EvidenceItem[] {
   const routes = compactEvidence([
     ...(response.forward?.matched_route_ids ?? response.matched_route_ids ?? []),
     ...(response.return_path?.matched_route_ids ?? []),
@@ -293,7 +314,11 @@ function routeEvidenceSummary(response: Extract<RouteResponse, { ok: true }>) {
     ...(response.return_path?.matched_nat_rule_ids ?? []),
   ]);
 
-  return `routes ${routes.length ? routes.join(" -> ") : "なし"} / policy ${policies.length ? policies.join(" -> ") : "なし"} / NAT ${natRules.length ? natRules.join(" -> ") : "なし"}`;
+  return [
+    { label: "routes", value: routes.length ? routes.join(" -> ") : "なし" },
+    { label: "policy", value: policies.length ? policies.join(" -> ") : "なし" },
+    { label: "NAT", value: natRules.length ? natRules.join(" -> ") : "なし" },
+  ];
 }
 
 function compactEvidence(values: string[]) {
