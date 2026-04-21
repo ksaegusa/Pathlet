@@ -18,6 +18,7 @@ import { reachabilityScopeLabel, routeStatusLabel, testResultLabel } from "../fo
 import { actualReachabilityLabel, causeCodeLabel, causeTone, diagnoseTrafficTest, endpointNameForIp, evaluationTone, factLabel, factTone, shortInterfaceLabel, trafficTestTitle } from "../diagnosis";
 import type {
   GraphModel,
+  ForwardingRuleModel,
   InterfaceModel,
   LinkModel,
   NatRuleModel,
@@ -193,6 +194,9 @@ export function NodeDetailsPanel({
   onAddNatRule,
   onUpdateNatRule,
   onDeleteNatRule,
+  onAddForwardingRule,
+  onUpdateForwardingRule,
+  onDeleteForwardingRule,
   onSelectLink,
 }: {
   graph: GraphModel;
@@ -215,6 +219,9 @@ export function NodeDetailsPanel({
   onAddNatRule: (nodeId: string) => void;
   onUpdateNatRule: (ruleId: string, patch: Partial<NatRuleModel>) => void;
   onDeleteNatRule: (ruleId: string) => void;
+  onAddForwardingRule: (nodeId: string) => void;
+  onUpdateForwardingRule: (ruleId: string, patch: Partial<ForwardingRuleModel>) => void;
+  onDeleteForwardingRule: (ruleId: string) => void;
   onSelectLink: (linkId: string) => void;
 }) {
   if (!node) {
@@ -243,6 +250,9 @@ export function NodeDetailsPanel({
   const natRules = (graph.nat_rules ?? [])
     .filter((rule) => rule.node_id === node.id)
     .sort((a, b) => a.direction.localeCompare(b.direction) || a.id.localeCompare(b.id));
+  const forwardingRules = (graph.forwarding_rules ?? [])
+    .filter((rule) => rule.node_id === node.id)
+    .sort((a, b) => a.id.localeCompare(b.id));
   const nodeDown = downNodeIds.has(node.id);
   const deviceType = nodeDeviceType(node);
   const capabilities = nodeCapabilities(node);
@@ -527,6 +537,87 @@ export function NodeDetailsPanel({
             ))
           ) : (
             <EmptyMessage>このノードにNATルールはありません。</EmptyMessage>
+          )}
+        </div>
+      ) : null}
+
+      {capabilities.canEditRouting ? (
+        <div className="grid gap-2">
+          <div className="flex items-center justify-between gap-3">
+            <div>
+              <h3 className="text-sm font-semibold text-zinc-950">Forwarding</h3>
+              <p className="mt-1 text-xs text-zinc-500">
+                未設定時は従来どおりノード内の全interface間を転送可能として扱います。
+              </p>
+            </div>
+            <button className={buttonClass("secondary")} type="button" onClick={() => onAddForwardingRule(node.id)}>
+              Forwarding追加
+            </button>
+          </div>
+          {forwardingRules.length ? (
+            forwardingRules.map((rule) => (
+              <div className="grid gap-2 rounded-lg border border-zinc-200 bg-white p-3" key={rule.id}>
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <span className="break-all font-mono text-xs font-semibold text-zinc-800">{rule.id}</span>
+                    <Badge tone={rule.active ? "success" : "muted"}>{rule.active ? "active" : "inactive"}</Badge>
+                    <Badge tone={rule.bidirectional ?? true ? "success" : "muted"}>
+                      {(rule.bidirectional ?? true) ? "bidirectional" : "one-way"}
+                    </Badge>
+                  </div>
+                  <button className={buttonClass("danger")} type="button" onClick={() => onDeleteForwardingRule(rule.id)}>
+                    削除
+                  </button>
+                </div>
+                <div className="grid gap-2 md:grid-cols-3">
+                  <Field label="from">
+                    <select className={inputClass} value={rule.from_interface} onChange={(event) => onUpdateForwardingRule(rule.id, { from_interface: event.target.value })}>
+                      {interfaces.map((interfaceItem) => (
+                        <option key={interfaceItem.id} value={interfaceItem.id}>{shortInterfaceLabel(interfaceItem.id)}</option>
+                      ))}
+                    </select>
+                  </Field>
+                  <Field label="to">
+                    <select className={inputClass} value={rule.to_interface} onChange={(event) => onUpdateForwardingRule(rule.id, { to_interface: event.target.value })}>
+                      {interfaces.map((interfaceItem) => (
+                        <option key={interfaceItem.id} value={interfaceItem.id}>{shortInterfaceLabel(interfaceItem.id)}</option>
+                      ))}
+                    </select>
+                  </Field>
+                  <Field label="active">
+                    <select className={inputClass} value={rule.active ? "active" : "inactive"} onChange={(event) => onUpdateForwardingRule(rule.id, { active: event.target.value === "active" })}>
+                      <option value="active">active</option>
+                      <option value="inactive">inactive</option>
+                    </select>
+                  </Field>
+                </div>
+                <details className="rounded-md border border-zinc-200 bg-zinc-50 p-2">
+                  <summary className="cursor-pointer text-xs font-semibold text-zinc-600">詳細</summary>
+                  <div className="mt-2 grid gap-2 md:grid-cols-5">
+                    <Field label="cost">
+                      <input className={inputClass} min="0" type="number" value={rule.cost ?? ""} onChange={(event) => onUpdateForwardingRule(rule.id, { cost: optionalNumber(event.target.value) })} />
+                    </Field>
+                    <Field label="direction">
+                      <select className={inputClass} value={(rule.bidirectional ?? true) ? "bidirectional" : "one-way"} onChange={(event) => onUpdateForwardingRule(rule.id, { bidirectional: event.target.value === "bidirectional" })}>
+                        <option value="bidirectional">bidirectional</option>
+                        <option value="one-way">one-way</option>
+                      </select>
+                    </Field>
+                    <Field label="VRF">
+                      <input className={inputClass} value={rule.vrf_id ?? ""} onChange={(event) => onUpdateForwardingRule(rule.id, { vrf_id: event.target.value || undefined })} />
+                    </Field>
+                    <Field label="VLAN">
+                      <input className={inputClass} min="1" max="4094" type="number" value={rule.vlan_id ?? ""} onChange={(event) => onUpdateForwardingRule(rule.id, { vlan_id: optionalNumber(event.target.value) })} />
+                    </Field>
+                    <Field label="id">
+                      <input className={inputClass} value={rule.id} readOnly />
+                    </Field>
+                  </div>
+                </details>
+              </div>
+            ))
+          ) : (
+            <EmptyMessage>このノードは明示forwarding未設定です。従来互換の全interface転送を使います。</EmptyMessage>
           )}
         </div>
       ) : null}
@@ -1442,7 +1533,7 @@ export function TrafficTestsPanel({
   const visibleTests = tests.filter((test) => {
     const result = results[test.id];
     const status = result?.status ?? "pending";
-    const diagnosis = diagnoseTrafficTest(result, test);
+    const diagnosis = diagnoseTrafficTest(graph, result, test);
     const title = trafficTestTitle(graph, test);
     const matchesStatus = statusFilter === "all" || status === statusFilter;
     const matchesQuery = !normalizedQuery || [
@@ -1525,7 +1616,7 @@ export function TrafficTestsPanel({
               <div className="min-w-[980px] divide-y divide-zinc-100">
                 {visibleTests.map((test) => {
                   const result = results[test.id];
-                  const diagnosis = diagnoseTrafficTest(result, test);
+                  const diagnosis = diagnoseTrafficTest(graph, result, test);
                   const protocol = test.port ? `${test.protocol.toUpperCase()}/${test.port}` : test.protocol.toUpperCase();
                   const selected = selectedTest?.id === test.id;
                   const endpointsExist = endpointIpSet.has(test.source) && endpointIpSet.has(test.destination);
@@ -1623,7 +1714,7 @@ export function TrafficTestDetailPanel({
     return <EmptyMessage>試験を選択してください。</EmptyMessage>;
   }
 
-  const diagnosis = diagnoseTrafficTest(result, test);
+  const diagnosis = diagnoseTrafficTest(graph, result, test);
 
   return (
     <div className="grid gap-3 p-4">

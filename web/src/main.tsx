@@ -3,12 +3,13 @@ import { createRoot } from "react-dom/client";
 import { FileDown, FileJson, ListChecks, Network, Shield } from "lucide-react";
 import { stringify as stringifyYaml } from "yaml";
 import { Badge, Card, CardHeader, Field, Modal, SearchableEndpointSelect, buttonClass, cn } from "./components/common";
+import { DecisionBanner } from "./components/DecisionBanner";
 import { GraphEditor, NatPanel, NodeDetailsPanel, PolicyPanel, RoutingPanel, SelectedLinkPanel, TrafficIntentEditor, TrafficTestDetailPanel, TrafficTestsPanel } from "./components/editors";
 import { RouteDetails } from "./components/RouteDetails";
 import { Topology } from "./components/Topology";
 import { exampleGraph, exampleTrafficTests } from "./exampleGraph";
 import { modalTitle, routeStatusLabel } from "./formatters";
-import { actualReachabilityLabel, causeCodeLabel, causeTone, diagnoseRoute, diagnoseTrafficTest, endpointNameForIp, evaluationTone, factLabel, factTone, nextActionForDiagnosis, nodeDecisionStates, trafficTestTitle, type RouteDiagnosis } from "./diagnosis";
+import { diagnoseRoute, diagnoseTrafficTest, endpointNameForIp, factLabel, nodeDecisionStates, trafficTestTitle } from "./diagnosis";
 import { buildElkLayout } from "./topologyLayout";
 import {
   applyRuntimeState,
@@ -17,6 +18,7 @@ import {
   buildTrafficIntent,
   buildTrafficSpec,
   clamp,
+  cleanForwardingRule,
   cleanNatRule,
   cleanPolicyRule,
   cleanRouteEntry,
@@ -42,6 +44,7 @@ import {
   resolveInterfaceByIp,
   toggleSetValue,
   uniqueLinkId,
+  uniqueForwardingRuleId,
   uniqueNatRuleId,
   uniquePolicyId,
   uniqueRouteId,
@@ -51,6 +54,7 @@ import {
 import type {
   ActiveModal,
   GraphModel,
+  ForwardingRuleModel,
   InterfaceDisplayMode,
   LayoutDirection,
   LinkModel,
@@ -154,8 +158,8 @@ function App() {
     [effectiveGraph, selectedTrafficTest, trafficIntent]
   );
   const routeDiagnosis = useMemo(
-    () => selectedTrafficTest ? diagnoseTrafficTest(selectedTrafficTestResult, selectedTrafficTest) : diagnoseRoute(routeResponse, trafficIntent),
-    [routeResponse, selectedTrafficTest, selectedTrafficTestResult, trafficIntent]
+    () => selectedTrafficTest ? diagnoseTrafficTest(effectiveGraph, selectedTrafficTestResult, selectedTrafficTest) : diagnoseRoute(effectiveGraph, routeResponse, trafficIntent),
+    [effectiveGraph, routeResponse, selectedTrafficTest, selectedTrafficTestResult, trafficIntent]
   );
   const displaySourceLabel = selectedTrafficTest
     ? endpointNameForIp(effectiveGraph, selectedTrafficTest.source)
@@ -350,7 +354,7 @@ function App() {
       "| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |",
       ...trafficTests.map((test) => {
         const result = trafficTestResults[test.id];
-        const diagnosis = diagnoseTrafficTest(result, test);
+        const diagnosis = diagnoseTrafficTest(graph, result, test);
         return [
           factLabel(diagnosis.facts.e2e),
           factLabel(diagnosis.facts.forward),
@@ -805,6 +809,47 @@ function App() {
     setStatus(`${ruleId} を削除しました`);
   }
 
+  function addForwardingRule(nodeId: string) {
+    const nodeInterfaces = graph.interfaces.filter((interfaceItem) => interfaceItem.node_id === nodeId);
+    if (nodeInterfaces.length < 2) {
+      setStatus("Forwarding ルールには同一ノード上の2つ以上のinterfaceが必要です");
+      return;
+    }
+
+    setGraph((currentGraph) => ({
+      ...currentGraph,
+      forwarding_rules: [
+        ...(currentGraph.forwarding_rules ?? []),
+        cleanForwardingRule({
+          id: uniqueForwardingRuleId(currentGraph, nodeId),
+          node_id: nodeId,
+          from_interface: nodeInterfaces[0].id,
+          to_interface: nodeInterfaces[1].id,
+          active: true,
+          bidirectional: true,
+        }),
+      ],
+    }));
+    setStatus(`${nodeId} にForwardingルールを追加しました`);
+  }
+
+  function updateForwardingRule(ruleId: string, patch: Partial<ForwardingRuleModel>) {
+    setGraph((currentGraph) => ({
+      ...currentGraph,
+      forwarding_rules: (currentGraph.forwarding_rules ?? []).map((rule) =>
+        rule.id === ruleId ? cleanForwardingRule({ ...rule, ...patch }) : rule
+      ),
+    }));
+  }
+
+  function deleteForwardingRule(ruleId: string) {
+    setGraph((currentGraph) => ({
+      ...currentGraph,
+      forwarding_rules: (currentGraph.forwarding_rules ?? []).filter((rule) => rule.id !== ruleId),
+    }));
+    setStatus(`${ruleId} を削除しました`);
+  }
+
   function addLink() {
     if (!newLinkFrom || !newLinkTo || newLinkFrom === newLinkTo) {
       setStatus("異なる2つのノードを選んでください");
@@ -1093,6 +1138,31 @@ function App() {
     setOpenRuleSections((current) => ({ ...current, [section]: !current[section] }));
   }
 
+  function jumpToDiagnosisTarget() {
+    const targetNodeId = routeDiagnosis.remediation.target.nodeId;
+    if (targetNodeId) {
+      setSelectedNodeId(targetNodeId);
+      setActiveModal("node");
+      setStatus(`${targetNodeId} を開きました`);
+      return;
+    }
+
+    if (routeDiagnosis.remediation.target.type === "route") {
+      setActiveView("rules");
+      setOpenRuleSections((current) => ({ ...current, routing: true }));
+      return;
+    }
+    if (routeDiagnosis.remediation.target.type === "policy") {
+      setActiveView("rules");
+      setOpenRuleSections((current) => ({ ...current, policy: true }));
+      return;
+    }
+    if (routeDiagnosis.remediation.target.type === "nat") {
+      setActiveView("rules");
+      setOpenRuleSections((current) => ({ ...current, nat: true }));
+    }
+  }
+
   function ruleSection({
     id,
     title,
@@ -1150,6 +1220,7 @@ function App() {
               destination={displayDestinationLabel}
               protocol={displayProtocolLabel}
               sourceLabel={displayContextLabel}
+              onJump={jumpToDiagnosisTarget}
             />
           </Card>
         </section>
@@ -1282,6 +1353,9 @@ function App() {
                 onAddNatRule={addNatRule}
                 onUpdateNatRule={updateNatRule}
                 onDeleteNatRule={deleteNatRule}
+                onAddForwardingRule={addForwardingRule}
+                onUpdateForwardingRule={updateForwardingRule}
+                onDeleteForwardingRule={deleteForwardingRule}
                 onSelectLink={(linkId) => {
                   setSelectedLinkId(linkId);
                   setActiveModal("link");
@@ -1362,101 +1436,6 @@ function interfaceEndpointOptions(graph: GraphModel) {
       ip,
       label: `${ip} (${interfaceItem.node_id})`,
     }];
-  });
-}
-
-function DecisionBanner({
-  diagnosis,
-  source,
-  destination,
-  protocol,
-  sourceLabel,
-}: {
-  diagnosis: RouteDiagnosis;
-  source: string;
-  destination: string;
-  protocol: string;
-  sourceLabel: string;
-}) {
-  const actualReachability = actualReachabilityLabel(diagnosis);
-  const nextAction = nextActionForDiagnosis(diagnosis);
-  return (
-    <div className={cn(
-      "grid gap-4 px-4 py-4 lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_minmax(0,1.1fr)]",
-      diagnosis.evaluation.result === "PASS" && "bg-teal-50/70",
-      diagnosis.evaluation.result === "FAIL" && "bg-red-50/80",
-      diagnosis.evaluation.result === "PENDING" && "bg-zinc-50",
-      diagnosis.evaluation.result === "ERROR" && "bg-red-50/80"
-    )}>
-      <div className="min-w-0 rounded-md border border-zinc-200 bg-white p-3">
-        <div className="text-xs font-semibold uppercase text-zinc-500">実通信</div>
-        <div className="mt-2 flex flex-wrap items-center gap-2">
-          <Badge tone={factTone(diagnosis.facts.e2e)}>{actualReachability}</Badge>
-          <span className="text-xs font-semibold text-zinc-500">actual reachability</span>
-        </div>
-        <div className="mt-2 flex flex-wrap gap-2">
-          <Badge tone={factTone(diagnosis.facts.e2e)}>E2E {factLabel(diagnosis.facts.e2e)}</Badge>
-          <Badge tone={factTone(diagnosis.facts.forward)}>FWD {factLabel(diagnosis.facts.forward)}</Badge>
-          <Badge tone={factTone(diagnosis.facts.reverse)}>REV {factLabel(diagnosis.facts.reverse)}</Badge>
-        </div>
-        <div className="mt-2 break-words font-mono text-sm font-semibold text-zinc-900">
-          {source} {"->"} {destination} / {protocol}
-        </div>
-      </div>
-      <div className="min-w-0 rounded-md border border-zinc-200 bg-white p-3">
-        <div className="text-xs font-semibold uppercase text-zinc-500">設計評価</div>
-        <div className="mt-2 flex flex-wrap gap-2">
-          <Badge tone={evaluationTone(diagnosis.evaluation.result)}>{diagnosis.evaluation.result}</Badge>
-          <Badge tone={diagnosis.evaluation.expectedReachable ? "success" : "danger"}>
-            期待 {diagnosis.evaluation.expectedReachable ? "到達可能" : "到達不可"}
-          </Badge>
-        </div>
-        <div className="mt-2 text-sm font-semibold text-zinc-800">{sourceLabel}</div>
-        <div className="mt-1 text-xs text-zinc-600">{nextAction}</div>
-      </div>
-      <div className="min-w-0 rounded-md border border-zinc-200 bg-white p-3">
-        <div className="text-xs font-semibold uppercase text-zinc-500">原因</div>
-        <div className="mt-2 flex flex-wrap gap-2">
-          <Badge tone={causeTone(diagnosis.cause.code, diagnosis.evaluation.result)}>{causeCodeLabel(diagnosis.cause.code)}</Badge>
-          <Badge tone="muted">{diagnosis.cause.leg}</Badge>
-        </div>
-        <div className="mt-2 text-sm font-semibold text-zinc-950">{diagnosis.cause.message}</div>
-        <EvidenceList evidence={diagnosis.cause.evidence} />
-      </div>
-    </div>
-  );
-}
-
-function EvidenceList({ evidence }: { evidence: string }) {
-  const items = parseEvidence(evidence);
-  if (!items.length) {
-    return null;
-  }
-
-  return (
-    <div className="mt-2 grid gap-1 text-xs">
-      {items.map((item) => (
-        <div className="grid gap-1 sm:grid-cols-[4rem_minmax(0,1fr)]" key={item.label}>
-          <span className="font-semibold uppercase text-zinc-500">{item.label}</span>
-          <span className="min-w-0 break-words font-mono text-zinc-700">{item.value}</span>
-        </div>
-      ))}
-    </div>
-  );
-}
-
-function parseEvidence(evidence: string) {
-  const parts = evidence.split(" / ");
-  if (parts.length < 2) {
-    return evidence ? [{ label: "detail", value: evidence }] : [];
-  }
-
-  return parts.map((part) => {
-    const [label, ...valueParts] = part.split(" ");
-    return {
-      label,
-      value: valueParts.join(" ") || "-",
-    };
   });
 }
 

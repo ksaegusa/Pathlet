@@ -231,6 +231,7 @@ pub fn graph_from_yang_json(input: YangJsonGraph) -> Graph {
                 active: link.active,
             })
             .collect(),
+        forwarding_rules: vec![],
         nat_rules: vec![],
         routing: input
             .routing

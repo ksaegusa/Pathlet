@@ -1,0 +1,84 @@
+{
+  "nodes": [
+    {
+      "id": "branch-client",
+      "device_type": "client",
+      "group_id": "edge"
+    },
+    {
+      "id": "edge-fw",
+      "device_type": "network_device",
+      "group_id": "core",
+      "default_vrf_id": "corp"
+    },
+    {
+      "id": "public-api",
+      "device_type": "client",
+      "group_id": "service"
+    }
+  ],
+  "interfaces": [
+    {
+      "id": "branch-client-uplink",
+      "node_id": "branch-client",
+      "ip_address": "10.0.0.10/30"
+    },
+    {
+      "id": "edge-fw-branch-if",
+      "node_id": "edge-fw",
+      "ip_address": "10.0.0.9/30",
+      "vrf_id": "corp"
+    },
+    {
+      "id": "edge-fw-public-if",
+      "node_id": "edge-fw",
+      "ip_address": "198.51.100.1/30",
+      "vrf_id": "corp"
+    },
+    {
+      "id": "public-api-uplink",
+      "node_id": "public-api",
+      "ip_address": "198.51.100.2/30"
+    }
+  ],
+  "links": [
+    {
+      "id": "branch-edge",
+      "from_interface": "branch-client-uplink",
+      "to_interface": "edge-fw-branch-if",
+      "cost": 10,
+      "active": true
+    },
+    {
+      "id": "edge-public",
+      "from_interface": "edge-fw-public-if",
+      "to_interface": "public-api-uplink",
+      "cost": 10,
+      "active": true
+    }
+  ],
+  "forwarding_rules": [
+    {
+      "id": "edge-fw-branch-to-public",
+      "node_id": "edge-fw",
+      "from_interface": "edge-fw-branch-if",
+      "to_interface": "edge-fw-public-if",
+      "cost": 0,
+      "active": true,
+      "bidirectional": true,
+      "vrf_id": "corp"
+    }
+  ],
+  "routes": [
+    {
+      "id": "branch-default",
+      "node_id": "branch-client",
+      "destination": "0.0.0.0/0",
+      "next_hop": "edge-fw",
+      "egress_interface": "branch-client-uplink",
+      "metric": 10,
+      "administrative_distance": 1,
+      "active": true
+    }
+  ]
+}

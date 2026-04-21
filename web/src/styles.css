@@ -40,13 +40,20 @@ select {
   stroke-width: 1;
 }
 
+.topology-group-label-bg {
+  fill: #f6f7f9;
+  stroke: none;
+  opacity: 0.96;
+}
+
 .topology-group-label {
   fill: #52525b;
-  font-size: 9px;
+  font-size: 8.5px;
   font-weight: 800;
   letter-spacing: 0;
   pointer-events: none;
-  text-anchor: start;
+  text-anchor: middle;
+  dominant-baseline: middle;
   text-transform: uppercase;
 }
 

@@ -1,4 +1,5 @@
 import { nodeIdsFromPath, routeSegmentsFromPath, virtualIpForInterface } from "../graphModel";
+import type { Evidence } from "../diagnosis";
 import { evaluationStatusLabel, type EvaluationStatus, reachabilityLabel, reachabilityScopeLabel, routeStatusLabel, trafficLabel } from "../formatters";
 import type { GraphModel, PipelineLeg, RouteMode, RouteResponse, TrafficIntent } from "../types";
 import { Badge, EmptyMessage } from "./common";
@@ -203,8 +204,8 @@ function SummaryEvidenceRows({ label, items }: { label: string; items: EvidenceI
       <div className="grid min-w-0 gap-1">
         {items.map((item) => (
           <div className="grid gap-1 sm:grid-cols-[4rem_minmax(0,1fr)]" key={item.label}>
-            <span className="font-semibold uppercase text-zinc-500">{item.label}</span>
-            <span className="min-w-0 break-words font-mono text-zinc-700">{item.value}</span>
+            <span className={item.primary ? "font-semibold uppercase text-red-700" : "font-semibold uppercase text-zinc-500"}>{item.label}</span>
+            <span className={item.primary ? "min-w-0 break-words font-mono font-semibold text-red-800" : "min-w-0 break-words font-mono text-zinc-700"}>{item.value}</span>
           </div>
         ))}
       </div>
@@ -298,26 +299,36 @@ function pipelineAddressSummary(leg: PipelineLeg) {
 type EvidenceItem = {
   label: "routes" | "policy" | "NAT";
   value: string;
+  primary: boolean;
 };
 
 function routeEvidenceSummary(response: Extract<RouteResponse, { ok: true }>): EvidenceItem[] {
-  const routes = compactEvidence([
+  const evidence: Evidence = {
+    routes: compactEvidence([
     ...(response.forward?.matched_route_ids ?? response.matched_route_ids ?? []),
     ...(response.return_path?.matched_route_ids ?? []),
-  ]);
-  const policies = compactEvidence([
+    ]),
+    policies: compactEvidence([
     ...(response.forward?.matched_policy_ids ?? response.matched_policy_ids ?? []),
     ...(response.return_path?.matched_policy_ids ?? []),
-  ]);
-  const natRules = compactEvidence([
+    ]),
+    natRules: compactEvidence([
     ...(response.forward?.matched_nat_rule_ids ?? response.matched_nat_rule_ids ?? []),
     ...(response.return_path?.matched_nat_rule_ids ?? []),
-  ]);
+    ]),
+    primaryCause: response.forward?.matched_policy_ids?.length || response.matched_policy_ids?.length
+      ? "policy"
+      : response.forward?.matched_nat_rule_ids?.length || response.matched_nat_rule_ids?.length
+        ? "nat"
+        : response.forward?.matched_route_ids?.length || response.matched_route_ids?.length
+          ? "route"
+          : "none",
+  };
 
   return [
-    { label: "routes", value: routes.length ? routes.join(" -> ") : "なし" },
-    { label: "policy", value: policies.length ? policies.join(" -> ") : "なし" },
-    { label: "NAT", value: natRules.length ? natRules.join(" -> ") : "なし" },
+    { label: "routes", value: evidence.routes.length ? evidence.routes.join(" -> ") : "なし", primary: evidence.primaryCause === "route" },
+    { label: "policy", value: evidence.policies.length ? evidence.policies.join(" -> ") : "なし", primary: evidence.primaryCause === "policy" },
+    { label: "NAT", value: evidence.natRules.length ? evidence.natRules.join(" -> ") : "なし", primary: evidence.primaryCause === "nat" },
   ];
 }
 

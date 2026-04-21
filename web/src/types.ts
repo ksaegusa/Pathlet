@@ -56,6 +56,18 @@ export type LinkModel = {
   active: boolean;
 };
 
+export type ForwardingRuleModel = {
+  id: string;
+  node_id: string;
+  from_interface: string;
+  to_interface: string;
+  cost?: number;
+  active: boolean;
+  bidirectional?: boolean;
+  vrf_id?: string;
+  vlan_id?: number;
+};
+
 export type VirtualIpModel = {
   id: string;
   protocol: string;
@@ -180,6 +192,7 @@ export type GraphModel = {
   interfaces: InterfaceModel[];
   links: LinkModel[];
   groups?: NodeGroupModel[];
+  forwarding_rules?: ForwardingRuleModel[];
   virtual_ips?: VirtualIpModel[];
   nat_rules?: NatRuleModel[];
   routing?: YangRoutingModel[];

@@ -16,6 +16,24 @@ export type CauseCode =
   | "ERROR";
 
 export type NodeDecisionState = "SOURCE" | "GOAL" | "FWD" | "REV" | "AFFECTED" | "STOP" | "UNCONNECTED";
+export type DiagnosisLeg = "forward" | "return" | "traffic" | "none";
+export type Evidence = {
+  routes: string[];
+  policies: string[];
+  natRules: string[];
+  primaryCause: "route" | "policy" | "nat" | "topology" | "none";
+};
+export type Remediation = {
+  summary: string;
+  actions: string[];
+  target: {
+    type: "route" | "policy" | "nat" | "topology" | "none";
+    nodeId?: string;
+    interfaceId?: string;
+    ruleId?: string;
+  };
+  confidence: "high" | "medium" | "low";
+};
 
 export type RouteDiagnosis = {
   facts: {
@@ -29,10 +47,11 @@ export type RouteDiagnosis = {
   };
   cause: {
     code: CauseCode;
-    leg: "forward" | "return" | "traffic" | "none";
+    leg: DiagnosisLeg;
     message: string;
-    evidence: string;
+    evidence: Evidence;
   };
+  remediation: Remediation;
 };
 
 export function actualReachabilityLabel(diagnosis: RouteDiagnosis) {
@@ -46,34 +65,10 @@ export function actualReachabilityLabel(diagnosis: RouteDiagnosis) {
 }
 
 export function nextActionForDiagnosis(diagnosis: RouteDiagnosis) {
-  if (diagnosis.evaluation.result === "PENDING") {
-    return "試験または手動確認を実行してください";
-  }
-  if (diagnosis.evaluation.result === "ERROR") {
-    return "入力値またはトポロジデータを確認してください";
-  }
-  if (diagnosis.evaluation.result === "PASS" && diagnosis.facts.e2e === "fail") {
-    return "到達不可の設計として期待通りです。必要なら原因箇所だけ確認してください";
-  }
-  if (diagnosis.evaluation.result === "PASS") {
-    return "期待通りに到達しています";
-  }
-  if (diagnosis.cause.code === "POLICY_DENY") {
-    return "該当Policyのaction、direction、interfaceを確認してください";
-  }
-  if (diagnosis.cause.code === "REV_ROUTE_MISSING") {
-    return "戻り方向のRoutingまたはNAT戻しを確認してください";
-  }
-  if (diagnosis.cause.code === "NO_ROUTE") {
-    return "該当ノードの宛先ルートとnext-hopを確認してください";
-  }
-  if (diagnosis.cause.code === "LOOP") {
-    return "同じ宛先に対するnext-hopの循環を確認してください";
-  }
-  return "Routing、Policy、NATの順に該当設定を確認してください";
+  return diagnosis.remediation.summary;
 }
 
-export function diagnoseRoute(response: RouteResponse | null, intent: TrafficIntent): RouteDiagnosis {
+export function diagnoseRoute(graph: GraphModel, response: RouteResponse | null, intent: TrafficIntent): RouteDiagnosis {
   if (!response) {
     return pendingDiagnosis(intent.expectations.reachable);
   }
@@ -82,7 +77,18 @@ export function diagnoseRoute(response: RouteResponse | null, intent: TrafficInt
     return {
       facts: { e2e: "fail", forward: "not_checked", reverse: "not_checked" },
       evaluation: { expectedReachable: intent.expectations.reachable, result: "ERROR" },
-      cause: { code: "ERROR", leg: "traffic", message: response.error.code, evidence: response.error.message },
+      cause: {
+        code: "ERROR",
+        leg: "traffic",
+        message: response.error.code,
+        evidence: { routes: [], policies: [], natRules: [], primaryCause: "none" },
+      },
+      remediation: {
+        summary: "入力値またはトポロジデータを確認してください",
+        actions: [response.error.message],
+        target: { type: "none" },
+        confidence: "high",
+      },
     };
   }
 
@@ -93,6 +99,7 @@ export function diagnoseRoute(response: RouteResponse | null, intent: TrafficInt
   const expectationMatched = intent.expectations.reachable === e2eReachable;
   const failedLeg = failedLegFor(response, intent, effectiveStatus);
   const causeCode = causeCodeFor(response, intent, effectiveStatus, expectationMatched);
+  const evidence = evidenceFor(response, failedLeg);
 
   return {
     facts: {
@@ -108,12 +115,13 @@ export function diagnoseRoute(response: RouteResponse | null, intent: TrafficInt
       code: causeCode,
       leg: failedLeg,
       message: messageFor(causeCode, failedLeg, expectationMatched),
-      evidence: evidenceFor(response, failedLeg),
+      evidence,
     },
+      remediation: remediationForDiagnosis(graph, response, causeCode, failedLeg, expectationMatched, evidence),
   };
 }
 
-export function diagnoseTrafficTest(result: TrafficTestResultModel | undefined, test: TrafficTestRecordModel): RouteDiagnosis {
+export function diagnoseTrafficTest(graph: GraphModel, result: TrafficTestResultModel | undefined, test: TrafficTestRecordModel): RouteDiagnosis {
   if (!result) {
     return pendingDiagnosis(test.expectations.reachable);
   }
@@ -126,7 +134,13 @@ export function diagnoseTrafficTest(result: TrafficTestResultModel | undefined, 
         code: result.status === "error" ? "ERROR" : result.status === "pass" ? "NONE" : "EXPECTATION_MISMATCH",
         leg: "traffic",
         message: result.message,
-        evidence: test.expectations.reachable ? "期待: 到達可能" : "期待: 到達不可",
+        evidence: { routes: [], policies: [], natRules: [], primaryCause: "none" },
+      },
+      remediation: {
+        summary: result.status === "pass" ? "期待どおりです" : result.message,
+        actions: [test.expectations.reachable ? "期待: 到達可能" : "期待: 到達不可"],
+        target: { type: "none" },
+        confidence: "medium",
       },
     };
   }
@@ -138,7 +152,7 @@ export function diagnoseTrafficTest(result: TrafficTestResultModel | undefined, 
     port: test.port,
     expectations: test.expectations,
   };
-  return diagnoseRoute(result.response, intent);
+  return diagnoseRoute(graph, result.response, intent);
 }
 
 export function effectiveStatusForIntent(response: Extract<RouteResponse, { ok: true }>, intent: TrafficIntent): RouteStatus {
@@ -227,7 +241,7 @@ export function nodeDecisionStates({
   downInterfaceIds: Set<string>;
 }) {
   const states = new Map<string, NodeDecisionState>();
-  const diagnosis = diagnoseRoute(response, intent);
+  const diagnosis = diagnoseRoute(graph, response, intent);
   const forwardNodes = response?.ok ? nodeIdsFromPath(response.forward?.path ?? response.path, graph) : [];
   const reverseNodes = response?.ok ? nodeIdsFromPath(response.return_path?.path ?? [], graph) : [];
   const affectedNodes = affectedNodeIds(graph, response, diagnosis.cause.leg);
@@ -283,7 +297,18 @@ function pendingDiagnosis(expectedReachable: boolean): RouteDiagnosis {
   return {
     facts: { e2e: "not_checked", forward: "not_checked", reverse: "not_checked" },
     evaluation: { expectedReachable, result: "PENDING" },
-    cause: { code: "PENDING", leg: "none", message: "判定待ち", evidence: "試験または手動確認を実行すると表示します" },
+    cause: {
+      code: "PENDING",
+      leg: "none",
+      message: "判定待ち",
+      evidence: { routes: [], policies: [], natRules: [], primaryCause: "none" },
+    },
+    remediation: {
+      summary: "試験または手動確認を実行してください",
+      actions: ["実行後に修正候補を表示します"],
+      target: { type: "none" },
+      confidence: "high",
+    },
   };
 }
 
@@ -331,7 +356,7 @@ function failedLegFor(
   return response.forward?.status !== "reachable" ? "forward" : "traffic";
 }
 
-function messageFor(code: CauseCode, failedLeg: RouteDiagnosis["cause"]["leg"], expectationMatched: boolean) {
+function messageFor(code: CauseCode, failedLeg: DiagnosisLeg, expectationMatched: boolean) {
   if (code === "NONE") {
     return expectationMatched ? "期待と実際が一致しています" : "到達不可を期待しましたが到達できます";
   }
@@ -362,27 +387,41 @@ function messageFor(code: CauseCode, failedLeg: RouteDiagnosis["cause"]["leg"], 
   return `${legLabel(failedLeg)}で到達できません`;
 }
 
-function evidenceFor(response: Extract<RouteResponse, { ok: true }>, failedLeg: RouteDiagnosis["cause"]["leg"]) {
+function evidenceFor(response: Extract<RouteResponse, { ok: true }>, failedLeg: DiagnosisLeg): Evidence {
   const leg = failedLeg === "return" ? response.return_path : response.forward;
   if (!leg) {
     return routeEvidence(response);
   }
-  return [
-    leg.matched_route_ids.length ? `routes ${leg.matched_route_ids.join(" -> ")}` : "routes なし",
-    leg.matched_policy_ids.length ? `policy ${leg.matched_policy_ids.join(" -> ")}` : "policy なし",
-    leg.matched_nat_rule_ids.length ? `NAT ${leg.matched_nat_rule_ids.join(" -> ")}` : "NAT なし",
-  ].join(" / ");
+  return {
+    routes: leg.matched_route_ids,
+    policies: leg.matched_policy_ids,
+    natRules: leg.matched_nat_rule_ids,
+    primaryCause: leg.matched_policy_ids.length
+      ? "policy"
+      : leg.matched_nat_rule_ids.length
+        ? "nat"
+        : leg.matched_route_ids.length
+          ? "route"
+          : "none",
+  };
 }
 
-function routeEvidence(response: Extract<RouteResponse, { ok: true }>) {
-  return [
-    response.matched_route_ids?.length ? `routes ${response.matched_route_ids.join(" -> ")}` : "routes なし",
-    response.matched_policy_ids?.length ? `policy ${response.matched_policy_ids.join(" -> ")}` : "policy なし",
-    response.matched_nat_rule_ids?.length ? `NAT ${response.matched_nat_rule_ids.join(" -> ")}` : "NAT なし",
-  ].join(" / ");
+function routeEvidence(response: Extract<RouteResponse, { ok: true }>): Evidence {
+  return {
+    routes: response.matched_route_ids ?? [],
+    policies: response.matched_policy_ids ?? [],
+    natRules: response.matched_nat_rule_ids ?? [],
+    primaryCause: response.matched_policy_ids?.length
+      ? "policy"
+      : response.matched_nat_rule_ids?.length
+        ? "nat"
+        : response.matched_route_ids?.length
+          ? "route"
+          : "none",
+  };
 }
 
-function affectedNodeIds(graph: GraphModel, response: RouteResponse | null, failedLeg: RouteDiagnosis["cause"]["leg"]) {
+function affectedNodeIds(graph: GraphModel, response: RouteResponse | null, failedLeg: DiagnosisLeg) {
   if (!response?.ok) {
     return new Set<string>();
   }
@@ -394,7 +433,7 @@ function affectedNodeIds(graph: GraphModel, response: RouteResponse | null, fail
   return new Set(nodeIdsFromPath(path, graph));
 }
 
-function legLabel(failedLeg: RouteDiagnosis["cause"]["leg"]) {
+function legLabel(failedLeg: DiagnosisLeg) {
   if (failedLeg === "return") {
     return "復路";
   }
@@ -402,4 +441,97 @@ function legLabel(failedLeg: RouteDiagnosis["cause"]["leg"]) {
     return "往路";
   }
   return "通信";
+}
+
+function remediationForDiagnosis(
+  graph: GraphModel,
+  response: Extract<RouteResponse, { ok: true }>,
+  code: CauseCode,
+  failedLeg: DiagnosisLeg,
+  expectationMatched: boolean,
+  evidence: Evidence
+): Remediation {
+  const failedNodeId = failedNodeFor(graph, response, failedLeg);
+  if (code === "NONE") {
+    return {
+      summary: expectationMatched ? "期待どおりに到達しています" : "到達不可を期待しましたが到達できます",
+      actions: expectationMatched ? ["追加対応は不要です"] : ["期待値または試験条件を見直してください"],
+      target: { type: "none" },
+      confidence: "high",
+    };
+  }
+  if (code === "PENDING") {
+    return {
+      summary: "試験または手動確認を実行してください",
+      actions: ["実行後に修正ポイントを表示します"],
+      target: { type: "none" },
+      confidence: "high",
+    };
+  }
+  if (code === "POLICY_DENY") {
+    return {
+      summary: "該当Policyのdeny条件を確認してください",
+      actions: ["action、direction、interface、source/destination条件を確認", "必要ならpermit ruleまたは例外を追加"],
+      target: { type: "policy", nodeId: failedNodeId, ruleId: evidence.policies[0] },
+      confidence: evidence.policies[0] ? "high" : "medium",
+    };
+  }
+  if (code === "REV_ROUTE_MISSING") {
+    return {
+      summary: "戻り方向のRouteを追加または修正してください",
+      actions: ["復路のnext-hopとegress interfaceを確認", "NAT戻しが必要ならtranslatedアドレスへの戻り経路も確認"],
+      target: { type: "route", nodeId: failedNodeId },
+      confidence: failedNodeId ? "high" : "medium",
+    };
+  }
+  if (code === "NO_ROUTE") {
+    return {
+      summary: "宛先へのRouteを追加または修正してください",
+      actions: ["destination、next-hop、egress interfaceを確認", "VRF/VLANが意図どおりか確認"],
+      target: { type: "route", nodeId: failedNodeId, ruleId: evidence.routes[0] },
+      confidence: failedNodeId ? "high" : "medium",
+    };
+  }
+  if (code === "LOOP") {
+    return {
+      summary: "next-hopの循環を解消してください",
+      actions: ["同じ宛先に対するrouteのnext-hop循環を確認", "優先度やinactive routeの設定も確認"],
+      target: { type: "route", nodeId: failedNodeId, ruleId: evidence.routes[0] },
+      confidence: "medium",
+    };
+  }
+  if (code === "BLACKHOLE") {
+    return {
+      summary: "blackhole routeの意図を確認してください",
+      actions: ["blackhole routeが必要か確認", "必要でなければ通常routeへ置き換え"],
+      target: { type: "route", nodeId: failedNodeId, ruleId: evidence.routes[0] },
+      confidence: "medium",
+    };
+  }
+  if (code === "ERROR") {
+    return {
+      summary: "入力値またはトポロジデータを確認してください",
+      actions: ["interface、route、link参照の整合性を確認"],
+      target: { type: "none" },
+      confidence: "high",
+    };
+  }
+  return {
+    summary: `${legLabel(failedLeg)}のRouting、Policy、NATを順に確認してください`,
+    actions: ["まずrouting、その後policy、最後にNATを確認"],
+    target: { type: evidence.primaryCause === "none" ? "topology" : evidence.primaryCause, nodeId: failedNodeId },
+    confidence: "medium",
+  };
+}
+
+function failedNodeFor(graph: GraphModel, response: Extract<RouteResponse, { ok: true }>, failedLeg: DiagnosisLeg) {
+  const path = failedLeg === "return"
+    ? (response.return_path?.path ?? [])
+    : failedLeg === "forward"
+      ? (response.forward?.path ?? response.path)
+      : response.path;
+  const interfaceId = path.length ? path.at(-1) : undefined;
+  return interfaceId
+    ? graph.interfaces.find((interfaceItem) => interfaceItem.id === interfaceId)?.node_id
+    : undefined;
 }
