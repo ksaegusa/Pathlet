@@ -51,24 +51,6 @@ pub struct Link {
 }
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
-pub struct ForwardingRule {
-    pub id: String,
-    pub node_id: String,
-    pub from_interface: String,
-    pub to_interface: String,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub cost: Option<u32>,
-    #[serde(default = "default_true")]
-    pub active: bool,
-    #[serde(default = "default_true")]
-    pub bidirectional: bool,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub vrf_id: Option<String>,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub vlan_id: Option<u16>,
-}
-
-#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub struct RouteEntry {
     pub id: String,
     pub node_id: String,
@@ -146,8 +128,6 @@ pub struct Graph {
     #[serde(deserialize_with = "deserialize_interfaces")]
     pub interfaces: Vec<Interface>,
     pub links: Vec<Link>,
-    #[serde(default, skip_serializing_if = "Vec::is_empty")]
-    pub forwarding_rules: Vec<ForwardingRule>,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub nat_rules: Vec<NatRule>,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
@@ -553,49 +533,6 @@ impl Graph {
             }
         }
 
-        for rule in &self.forwarding_rules {
-            if !node_ids.contains(rule.node_id.as_str()) {
-                return Err(RouteError::invalid_input(format!(
-                    "forwarding rule '{}' references missing node '{}'",
-                    rule.id, rule.node_id
-                )));
-            }
-
-            let Some(from_interface) = self
-                .interfaces
-                .iter()
-                .find(|interface| interface.id == rule.from_interface)
-            else {
-                return Err(RouteError::invalid_input(format!(
-                    "forwarding rule '{}' references missing from_interface '{}'",
-                    rule.id, rule.from_interface
-                )));
-            };
-            let Some(to_interface) = self
-                .interfaces
-                .iter()
-                .find(|interface| interface.id == rule.to_interface)
-            else {
-                return Err(RouteError::invalid_input(format!(
-                    "forwarding rule '{}' references missing to_interface '{}'",
-                    rule.id, rule.to_interface
-                )));
-            };
-
-            if from_interface.node_id != rule.node_id {
-                return Err(RouteError::invalid_input(format!(
-                    "forwarding rule '{}' from_interface '{}' belongs to node '{}', not '{}'",
-                    rule.id, rule.from_interface, from_interface.node_id, rule.node_id
-                )));
-            }
-            if to_interface.node_id != rule.node_id {
-                return Err(RouteError::invalid_input(format!(
-                    "forwarding rule '{}' to_interface '{}' belongs to node '{}', not '{}'",
-                    rule.id, rule.to_interface, to_interface.node_id, rule.node_id
-                )));
-            }
-        }
-
         for route in self.route_entries() {
             if !node_ids.contains(route.node_id.as_str()) {
                 return Err(RouteError::invalid_input(format!(
@@ -716,14 +653,7 @@ impl Graph {
                 .push(interface.id.as_str());
         }
 
-        for (node_id, interface_ids) in &interfaces_by_node {
-            let node_has_forwarding_rules = self
-                .forwarding_rules
-                .iter()
-                .any(|rule| rule.node_id == **node_id);
-            if node_has_forwarding_rules {
-                continue;
-            }
+        for interface_ids in interfaces_by_node.values() {
             for from_interface in interface_ids {
                 for to_interface in interface_ids {
                     if from_interface != to_interface {
@@ -733,22 +663,6 @@ impl Graph {
                             .push(((*to_interface).to_string(), 0));
                     }
                 }
-            }
-        }
-
-        for rule in self.forwarding_rules.iter().filter(|rule| rule.active) {
-            if forwarding_rule_matches_context(self, rule, &rule.from_interface) {
-                adjacency
-                    .entry(rule.from_interface.clone())
-                    .or_default()
-                    .push((rule.to_interface.clone(), rule.cost.unwrap_or(0)));
-            }
-            if rule.bidirectional && forwarding_rule_matches_context(self, rule, &rule.to_interface)
-            {
-                adjacency
-                    .entry(rule.to_interface.clone())
-                    .or_default()
-                    .push((rule.from_interface.clone(), rule.cost.unwrap_or(0)));
             }
         }
 
@@ -1371,33 +1285,11 @@ pub fn routing_table_path(
                     link.id, current_node_id
                 ))
             })?;
-        let current_interface = path.last().map(String::as_str).unwrap_or(from_interface);
-        let Some(internal_cost) =
-            internal_forwarding_cost(graph, current_node_id, current_interface, egress_interface)
-        else {
-            return Ok(Route {
-                path: path.clone(),
-                equal_cost_paths: vec![path],
-                cost,
-                status: RouteStatus::NoRoute,
-                matched_route_ids,
-                matched_policy_ids: vec![],
-                matched_nat_rule_ids: vec![],
-                translated_source: None,
-                translated_destination: None,
-                forward: None,
-                return_path: None,
-                loop_link_ids,
-            });
-        };
         append_interface_hop(&mut path, egress_interface);
         append_interface_hop(&mut path, ingress_interface);
-        cost = cost
-            .checked_add(internal_cost)
-            .and_then(|next_cost| next_cost.checked_add(link.cost))
-            .ok_or_else(|| {
-                RouteError::invalid_input("route cost overflowed u32 while tracing routing table")
-            })?;
+        cost = cost.checked_add(link.cost).ok_or_else(|| {
+            RouteError::invalid_input("route cost overflowed u32 while tracing routing table")
+        })?;
 
         let next_node_id = interface_by_id
             .get(ingress_interface)
@@ -1539,65 +1431,6 @@ fn route_matches_context(graph: &Graph, route: &RouteEntry, context: &RouteConte
         && route
             .vlan_id
             .is_none_or(|route_vlan_id| Some(route_vlan_id) == context.vlan_id)
-}
-
-fn forwarding_rule_matches_context(
-    graph: &Graph,
-    rule: &ForwardingRule,
-    interface_id: &str,
-) -> bool {
-    let Some(interface) = graph
-        .interfaces
-        .iter()
-        .find(|interface| interface.id == interface_id)
-    else {
-        return false;
-    };
-    let context = route_context_for_interface(graph, interface);
-    rule.vrf_id
-        .as_deref()
-        .is_none_or(|rule_vrf| rule_vrf == context.vrf_id)
-        && rule
-            .vlan_id
-            .is_none_or(|rule_vlan_id| Some(rule_vlan_id) == context.vlan_id)
-}
-
-fn internal_forwarding_cost(
-    graph: &Graph,
-    node_id: &str,
-    from_interface: &str,
-    to_interface: &str,
-) -> Option<u32> {
-    if from_interface == to_interface {
-        return Some(0);
-    }
-
-    let node_has_forwarding_rules = graph
-        .forwarding_rules
-        .iter()
-        .any(|rule| rule.node_id == node_id);
-    if !node_has_forwarding_rules {
-        return Some(0);
-    }
-
-    graph
-        .forwarding_rules
-        .iter()
-        .filter(|rule| rule.active && rule.node_id == node_id)
-        .find_map(|rule| {
-            let forward_match =
-                rule.from_interface == from_interface && rule.to_interface == to_interface;
-            let reverse_match = rule.bidirectional
-                && rule.from_interface == to_interface
-                && rule.to_interface == from_interface;
-            if (forward_match || reverse_match)
-                && forwarding_rule_matches_context(graph, rule, from_interface)
-            {
-                Some(rule.cost.unwrap_or(0))
-            } else {
-                None
-            }
-        })
 }
 
 fn link_matches_context(link: &Link, context: &RouteContext) -> bool {
@@ -1964,7 +1797,6 @@ mod tests {
                     active: false,
                 },
             ],
-            forwarding_rules: vec![],
             nat_rules: vec![],
             routing: vec![],
             acls: vec![],
@@ -2002,76 +1834,6 @@ mod tests {
             vec![vec!["r1-eth0", "r2-eth0", "r3-eth0"]]
         );
         assert_eq!(route.cost, 15);
-    }
-
-    #[test]
-    fn adjacency_list_uses_explicit_forwarding_rules_when_present() {
-        let mut graph = sample_graph();
-        graph.forwarding_rules = vec![ForwardingRule {
-            id: "r2-forward".into(),
-            node_id: "r2".into(),
-            from_interface: "r2-eth0".into(),
-            to_interface: "r2-eth1".into(),
-            cost: Some(3),
-            active: true,
-            bidirectional: false,
-            vrf_id: None,
-            vlan_id: None,
-        }];
-
-        let adjacency = graph.adjacency_list().unwrap();
-
-        assert!(adjacency["r2-eth0"].contains(&("r2-eth1".into(), 3)));
-        assert!(!adjacency["r2-eth1"].contains(&("r2-eth0".into(), 0)));
-        assert!(!adjacency["r2-eth1"].contains(&("r2-eth0".into(), 3)));
-    }
-
-    #[test]
-    fn routing_table_mode_requires_matching_forwarding_rule() {
-        let mut graph = sample_graph();
-        graph
-            .links
-            .retain(|link| link.id != "l2" && link.id != "l3");
-        graph
-            .links
-            .iter_mut()
-            .find(|link| link.id == "down")
-            .unwrap()
-            .active = true;
-        graph.routes.push(RouteEntry {
-            id: "r1-to-r3-via-r2".into(),
-            node_id: "r1".into(),
-            destination: "r3".into(),
-            next_hop: Some("r2".into()),
-            egress_interface: Some("r1-eth0".into()),
-            metric: 10,
-            administrative_distance: Some(1),
-            vrf_id: Some("default".into()),
-            vlan_id: None,
-            active: true,
-        });
-
-        let route_without_rule = routing_table_path(&graph, "r1-eth0", "r3-eth0").unwrap();
-        assert_eq!(route_without_rule.status, RouteStatus::Reachable);
-        assert_eq!(
-            route_without_rule.path,
-            vec!["r1-eth0", "r2-eth0", "r2-eth1", "r3-eth0"]
-        );
-
-        graph.forwarding_rules = vec![ForwardingRule {
-            id: "r2-only-reverse".into(),
-            node_id: "r2".into(),
-            from_interface: "r2-eth1".into(),
-            to_interface: "r2-eth0".into(),
-            cost: Some(1),
-            active: true,
-            bidirectional: false,
-            vrf_id: None,
-            vlan_id: None,
-        }];
-
-        let route_with_mismatch = routing_table_path(&graph, "r1-eth0", "r3-eth0").unwrap();
-        assert_eq!(route_with_mismatch.status, RouteStatus::NoRoute);
     }
 
     #[test]

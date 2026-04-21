@@ -2,7 +2,6 @@ import { parse as parseYaml } from "yaml";
 import { graphFromYangJson, isYangJsonGraph } from "./adapters/yangJson";
 import type {
   GraphModel,
-  ForwardingRuleModel,
   InputGraphModel,
   InputRouteRequest,
   InterfaceModel,
@@ -873,16 +872,6 @@ export function cleanNatRule(rule: NatRuleModel): NatRuleModel {
   };
 }
 
-export function cleanForwardingRule(rule: ForwardingRuleModel): ForwardingRuleModel {
-  return {
-    ...rule,
-    cost: Number.isFinite(rule.cost) ? Math.max(0, rule.cost ?? 0) : undefined,
-    bidirectional: rule.bidirectional ?? true,
-    vrf_id: rule.vrf_id?.trim() || undefined,
-    vlan_id: Number.isFinite(rule.vlan_id) ? rule.vlan_id : undefined,
-  };
-}
-
 export function cleanTrafficTestRecord(input: unknown, index = 0): TrafficTestRecordModel {
   const record = isRecord(input) ? input : {};
   const protocol = isTrafficProtocol(record.protocol) ? record.protocol : "tcp";
@@ -935,19 +924,6 @@ export function uniqueNatRuleId(graph: GraphModel, nodeId: string) {
   let suffix = 2;
 
   while ((graph.nat_rules ?? []).some((rule) => rule.id === candidate)) {
-    candidate = `${base}-${suffix}`;
-    suffix += 1;
-  }
-
-  return candidate;
-}
-
-export function uniqueForwardingRuleId(graph: GraphModel, nodeId: string) {
-  const base = `${nodeId}-forwarding`.replaceAll(/[^a-zA-Z0-9-]+/g, "-");
-  let candidate = base;
-  let suffix = 2;
-
-  while ((graph.forwarding_rules ?? []).some((rule) => rule.id === candidate)) {
     candidate = `${base}-${suffix}`;
     suffix += 1;
   }

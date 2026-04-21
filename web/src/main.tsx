@@ -18,7 +18,6 @@ import {
   buildTrafficIntent,
   buildTrafficSpec,
   clamp,
-  cleanForwardingRule,
   cleanNatRule,
   cleanPolicyRule,
   cleanRouteEntry,
@@ -44,7 +43,6 @@ import {
   resolveInterfaceByIp,
   toggleSetValue,
   uniqueLinkId,
-  uniqueForwardingRuleId,
   uniqueNatRuleId,
   uniquePolicyId,
   uniqueRouteId,
@@ -54,7 +52,6 @@ import {
 import type {
   ActiveModal,
   GraphModel,
-  ForwardingRuleModel,
   InterfaceDisplayMode,
   LayoutDirection,
   LinkModel,
@@ -809,47 +806,6 @@ function App() {
     setStatus(`${ruleId} を削除しました`);
   }
 
-  function addForwardingRule(nodeId: string) {
-    const nodeInterfaces = graph.interfaces.filter((interfaceItem) => interfaceItem.node_id === nodeId);
-    if (nodeInterfaces.length < 2) {
-      setStatus("Forwarding ルールには同一ノード上の2つ以上のinterfaceが必要です");
-      return;
-    }
-
-    setGraph((currentGraph) => ({
-      ...currentGraph,
-      forwarding_rules: [
-        ...(currentGraph.forwarding_rules ?? []),
-        cleanForwardingRule({
-          id: uniqueForwardingRuleId(currentGraph, nodeId),
-          node_id: nodeId,
-          from_interface: nodeInterfaces[0].id,
-          to_interface: nodeInterfaces[1].id,
-          active: true,
-          bidirectional: true,
-        }),
-      ],
-    }));
-    setStatus(`${nodeId} にForwardingルールを追加しました`);
-  }
-
-  function updateForwardingRule(ruleId: string, patch: Partial<ForwardingRuleModel>) {
-    setGraph((currentGraph) => ({
-      ...currentGraph,
-      forwarding_rules: (currentGraph.forwarding_rules ?? []).map((rule) =>
-        rule.id === ruleId ? cleanForwardingRule({ ...rule, ...patch }) : rule
-      ),
-    }));
-  }
-
-  function deleteForwardingRule(ruleId: string) {
-    setGraph((currentGraph) => ({
-      ...currentGraph,
-      forwarding_rules: (currentGraph.forwarding_rules ?? []).filter((rule) => rule.id !== ruleId),
-    }));
-    setStatus(`${ruleId} を削除しました`);
-  }
-
   function addLink() {
     if (!newLinkFrom || !newLinkTo || newLinkFrom === newLinkTo) {
       setStatus("異なる2つのノードを選んでください");
@@ -1353,9 +1309,6 @@ function App() {
                 onAddNatRule={addNatRule}
                 onUpdateNatRule={updateNatRule}
                 onDeleteNatRule={deleteNatRule}
-                onAddForwardingRule={addForwardingRule}
-                onUpdateForwardingRule={updateForwardingRule}
-                onDeleteForwardingRule={deleteForwardingRule}
                 onSelectLink={(linkId) => {
                   setSelectedLinkId(linkId);
                   setActiveModal("link");
