@@ -15,7 +15,7 @@ import {
   routeEntriesFromGraph,
 } from "../graphModel";
 import { reachabilityScopeLabel, routeStatusLabel, testResultLabel } from "../formatters";
-import { actualReachabilityLabel, causeCodeLabel, causeTone, diagnoseTrafficTest, endpointNameForIp, evaluationTone, factLabel, factTone, shortInterfaceLabel, trafficTestTitle } from "../diagnosis";
+import { actualReachabilityLabel, causeCodeLabel, causeTone, designIssueTone, diagnoseTrafficTest, endpointNameForIp, evaluationTone, factLabel, factTone, shortInterfaceLabel, trafficTestTitle } from "../diagnosis";
 import type {
   GraphModel,
   InterfaceModel,
@@ -1442,7 +1442,7 @@ export function TrafficTestsPanel({
   const visibleTests = tests.filter((test) => {
     const result = results[test.id];
     const status = result?.status ?? "pending";
-    const diagnosis = diagnoseTrafficTest(result, test);
+    const diagnosis = diagnoseTrafficTest(graph, result, test);
     const title = trafficTestTitle(graph, test);
     const matchesStatus = statusFilter === "all" || status === statusFilter;
     const matchesQuery = !normalizedQuery || [
@@ -1453,6 +1453,8 @@ export function TrafficTestsPanel({
       test.protocol,
       title,
       diagnosis.cause.code,
+      diagnosis.designIssue.headline,
+      diagnosis.designIssue.summary,
     ].some((value) => value.toLowerCase().includes(normalizedQuery));
     return matchesStatus && matchesQuery;
   });
@@ -1505,7 +1507,7 @@ export function TrafficTestsPanel({
             <Field label="検索">
               <input
                 className={inputClass}
-                placeholder="id / name / IP / cause"
+                placeholder="id / name / IP / design issue"
                 value={query}
                 onChange={(event) => setQuery(event.target.value)}
               />
@@ -1525,7 +1527,7 @@ export function TrafficTestsPanel({
               <div className="min-w-[980px] divide-y divide-zinc-100">
                 {visibleTests.map((test) => {
                   const result = results[test.id];
-                  const diagnosis = diagnoseTrafficTest(result, test);
+                  const diagnosis = diagnoseTrafficTest(graph, result, test);
                   const protocol = test.port ? `${test.protocol.toUpperCase()}/${test.port}` : test.protocol.toUpperCase();
                   const selected = selectedTest?.id === test.id;
                   const endpointsExist = endpointIpSet.has(test.source) && endpointIpSet.has(test.destination);
@@ -1559,8 +1561,8 @@ export function TrafficTestsPanel({
                       <div><Badge tone={test.expectations.reachable ? "success" : "danger"}>{test.expectations.reachable ? "期待OK" : "期待NG"}</Badge></div>
                       <div><Badge tone={factTone(diagnosis.facts.e2e)}>{actualReachabilityLabel(diagnosis)}</Badge></div>
                       <div className="min-w-0">
-                        <Badge tone={endpointsExist ? causeTone(diagnosis.cause.code, diagnosis.evaluation.result) : "danger"}>
-                          {endpointsExist ? causeCodeLabel(diagnosis.cause.code) : "UNKNOWN_IP"}
+                        <Badge tone={endpointsExist ? designIssueTone(diagnosis.designIssue.severity) : "danger"}>
+                          {endpointsExist ? diagnosis.designIssue.headline : "UNKNOWN_IP"}
                         </Badge>
                       </div>
                       <div className="flex justify-end gap-2">
@@ -1623,7 +1625,7 @@ export function TrafficTestDetailPanel({
     return <EmptyMessage>試験を選択してください。</EmptyMessage>;
   }
 
-  const diagnosis = diagnoseTrafficTest(result, test);
+  const diagnosis = diagnoseTrafficTest(graph, result, test);
 
   return (
     <div className="grid gap-3 p-4">
@@ -1632,9 +1634,10 @@ export function TrafficTestDetailPanel({
           <div className="min-w-0">
             <div className="flex flex-wrap items-center gap-2">
               <Badge tone={evaluationTone(diagnosis.evaluation.result)}>{diagnosis.evaluation.result}</Badge>
-              <Badge tone={causeTone(diagnosis.cause.code, diagnosis.evaluation.result)}>{causeCodeLabel(diagnosis.cause.code)}</Badge>
+              <Badge tone={designIssueTone(diagnosis.designIssue.severity)}>{diagnosis.designIssue.headline}</Badge>
             </div>
             <div className="mt-2 break-words text-base font-semibold text-zinc-950">{trafficTestTitle(graph, test)}</div>
+            <div className="mt-1 text-sm text-zinc-600">{diagnosis.designIssue.summary}</div>
           </div>
           <label className="inline-flex min-h-9 items-center gap-2 rounded-md border border-zinc-200 bg-white px-3 text-sm font-semibold text-zinc-700">
             <input checked={test.enabled} type="checkbox" onChange={(event) => onUpdate(test.id, { enabled: event.target.checked })} />

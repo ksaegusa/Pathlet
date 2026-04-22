@@ -80,6 +80,7 @@ Pathlet 固有として扱う代表例:
 VLAN と Tunnel は L2/L3 の境界があるため、routing lookup の条件へ混ぜ込む前にモデルを分ける。
 
 - VLAN は今回、interface/node の有効 VLAN と link の単一 `vlan_id` の一致条件として扱う。bridge domain / SVI / routed interface / trunk allowed VLAN list はまだ扱わない。
+- ノード内の interface 間転送は現在、簡易モデルとして同一ノード内全結線で扱う。zone-based firewall や line card / switching fabric 制約はまだ扱わない。
 - Tunnel は L3 overlay interface として扱う。外側経路、内側経路、encapsulation endpoint を分ける。
 - 標準 module の選定が終わるまでは、VLAN/Tunnel は Pathlet 拡張に置く。
 

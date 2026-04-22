@@ -93,6 +93,14 @@ export function Topology({
     ];
   });
 
+  function groupLabelDisplay(label: string, width: number) {
+    const maxChars = Math.max(6, Math.floor((width - 28) / 6.2));
+    if (label.length <= maxChars) {
+      return label;
+    }
+    return `${label.slice(0, Math.max(3, maxChars - 1))}…`;
+  }
+
   function pointFromEvent(event: ReactPointerEvent<SVGSVGElement>) {
     const svg = event.currentTarget;
     const point = svg.createSVGPoint();
@@ -157,21 +165,42 @@ export function Topology({
     >
       {groupBounds.map((group) => (
         <g key={group.id}>
-          <rect
-            className="topology-group"
-            x={group.x}
-            y={group.y}
-            width={group.width}
-            height={group.height}
-            rx="8"
-          />
-          <text
-            className="topology-group-label"
-            x={group.x + 10}
-            y={group.y + 16}
-          >
-            {group.label}
-          </text>
+          {(() => {
+            const labelWidth = Math.max(40, Math.min(group.width - 20, 180));
+            const visibleLabel = groupLabelDisplay(group.label, labelWidth);
+            const labelX = group.x + group.width / 2 - labelWidth / 2;
+            return (
+              <>
+                <clipPath id={`group-label-clip-${sanitizeClassName(group.id)}`}>
+                  <rect x={labelX + 4} y={group.y - 8} width={labelWidth - 8} height={16} rx="4" />
+                </clipPath>
+                <rect
+                  className="topology-group"
+                  x={group.x}
+                  y={group.y}
+                  width={group.width}
+                  height={group.height}
+                  rx="8"
+                />
+                <rect
+                  className="topology-group-label-bg"
+                  x={labelX}
+                  y={group.y - 10}
+                  width={labelWidth}
+                  height={20}
+                  rx="6"
+                />
+                <text
+                  className="topology-group-label"
+                  clipPath={`url(#group-label-clip-${sanitizeClassName(group.id)})`}
+                  x={group.x + group.width / 2}
+                  y={group.y}
+                >
+                  {visibleLabel}
+                </text>
+              </>
+            );
+          })()}
         </g>
       ))}
 
@@ -198,6 +227,10 @@ export function Topology({
         const routeFrom = routeFromNodeId ? layout.nodes.get(routeFromNodeId) : undefined;
         const routeTo = routeToNodeId ? layout.nodes.get(routeToNodeId) : undefined;
         const routeGeometry = routeFrom && routeTo ? linkGeometry(routeFrom, routeTo) : geometry;
+        const routePath = routeDirection?.from_interface === link.to_interface &&
+          routeDirection.to_interface === link.from_interface
+          ? routeGeometry.reversePath
+          : routeGeometry.path;
         return (
           <g key={link.id}>
             <path
@@ -216,7 +249,7 @@ export function Topology({
             />
             {isRoute ? (
               <circle className="route-packet" r={routePacketRadius}>
-                <animateMotion dur="1.6s" path={routeGeometry.path} repeatCount="indefinite" />
+                <animateMotion dur="1.6s" path={routePath} repeatCount="indefinite" />
               </circle>
             ) : null}
           </g>
