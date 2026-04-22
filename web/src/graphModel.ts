@@ -332,6 +332,7 @@ function shortenNodeLabel(label: string) {
 export function linkGeometry(from: { x: number; y: number }, to: { x: number; y: number }) {
   return {
     path: `M ${from.x} ${from.y} L ${to.x} ${to.y}`,
+    reversePath: `M ${to.x} ${to.y} L ${from.x} ${from.y}`,
   };
 }
 

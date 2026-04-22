@@ -14,6 +14,21 @@ export type CauseCode =
   | "BLACKHOLE"
   | "UNREACHABLE"
   | "ERROR";
+export type DesignIssueCategory =
+  | "NONE"
+  | "PENDING"
+  | "INPUT_ERROR"
+  | "RETURN_PATH_GAP"
+  | "NAT_RETURN_ASSUMPTION"
+  | "POLICY_ROUTE_INCONSISTENT"
+  | "FORWARD_ONLY_MISMATCH"
+  | "ROUTE_DESIGN_GAP"
+  | "BLACKHOLE_DESIGN"
+  | "LOOP_DESIGN"
+  | "UNREACHABLE_DESIGN"
+  | "EXPECTATION_MISMATCH";
+export type DesignIssueSeverity = "critical" | "high" | "medium" | "low";
+export type IntentRealityVerdict = "aligned" | "misaligned" | "pending" | "error";
 
 export type NodeDecisionState = "SOURCE" | "GOAL" | "FWD" | "REV" | "AFFECTED" | "STOP" | "UNCONNECTED";
 export type DiagnosisLeg = "forward" | "return" | "traffic" | "none";
@@ -51,6 +66,21 @@ export type RouteDiagnosis = {
     message: string;
     evidence: Evidence;
   };
+  designIssue: {
+    category: DesignIssueCategory;
+    headline: string;
+    summary: string;
+    severity: DesignIssueSeverity;
+  };
+  intentRealityGap: {
+    intentLabel: string;
+    realityLabel: string;
+    verdict: IntentRealityVerdict;
+  };
+  designAdvice: {
+    summary: string;
+    actions: string[];
+  };
   remediation: Remediation;
 };
 
@@ -74,6 +104,15 @@ export function diagnoseRoute(graph: GraphModel, response: RouteResponse | null,
   }
 
   if (!response.ok) {
+    const designIssue = designIssueFor({
+      code: "ERROR",
+      failedLeg: "traffic",
+      expectationMatched: false,
+      intent,
+      response: null,
+      evidence: { routes: [], policies: [], natRules: [], primaryCause: "none" },
+    });
+    const intentRealityGap = intentRealityGapFor(intent, "ERROR", "error");
     return {
       facts: { e2e: "fail", forward: "not_checked", reverse: "not_checked" },
       evaluation: { expectedReachable: intent.expectations.reachable, result: "ERROR" },
@@ -82,6 +121,12 @@ export function diagnoseRoute(graph: GraphModel, response: RouteResponse | null,
         leg: "traffic",
         message: response.error.code,
         evidence: { routes: [], policies: [], natRules: [], primaryCause: "none" },
+      },
+      designIssue,
+      intentRealityGap,
+      designAdvice: {
+        summary: "入力の整合性を確認してから再評価してください",
+        actions: ["interface、route、link 参照の不整合を解消", "試験条件の source / destination を確認"],
       },
       remediation: {
         summary: "入力値またはトポロジデータを確認してください",
@@ -100,6 +145,17 @@ export function diagnoseRoute(graph: GraphModel, response: RouteResponse | null,
   const failedLeg = failedLegFor(response, intent, effectiveStatus);
   const causeCode = causeCodeFor(response, intent, effectiveStatus, expectationMatched);
   const evidence = evidenceFor(response, failedLeg);
+  const designIssue = designIssueFor({
+    code: causeCode,
+    failedLeg,
+    expectationMatched,
+    intent,
+    response,
+    evidence,
+  });
+  const verdict: IntentRealityVerdict = expectationMatched ? "aligned" : "misaligned";
+  const intentRealityGap = intentRealityGapFor(intent, effectiveStatus, verdict);
+  const remediation = remediationForDiagnosis(graph, response, causeCode, failedLeg, expectationMatched, evidence);
 
   return {
     facts: {
@@ -117,7 +173,13 @@ export function diagnoseRoute(graph: GraphModel, response: RouteResponse | null,
       message: messageFor(causeCode, failedLeg, expectationMatched),
       evidence,
     },
-      remediation: remediationForDiagnosis(graph, response, causeCode, failedLeg, expectationMatched, evidence),
+    designIssue,
+    intentRealityGap,
+    designAdvice: {
+      summary: remediation.summary,
+      actions: designAdviceActionsFor(designIssue.category, remediation.actions),
+    },
+    remediation,
   };
 }
 
@@ -127,6 +189,35 @@ export function diagnoseTrafficTest(graph: GraphModel, result: TrafficTestResult
   }
 
   if (!result.response) {
+    const designIssue = result.status === "error"
+      ? designIssueFor({
+          code: "ERROR",
+          failedLeg: "traffic",
+          expectationMatched: false,
+          intent: {
+            source_node_id: test.source,
+            destination_node_id: test.destination,
+            protocol: test.protocol,
+            port: test.port,
+            expectations: test.expectations,
+          },
+          response: null,
+          evidence: { routes: [], policies: [], natRules: [], primaryCause: "none" },
+        })
+      : result.status === "pass"
+        ? {
+            category: "NONE" as const,
+            headline: "設計問題なし",
+            summary: "期待した通信要件と実際の結果が一致しています。",
+            severity: "low" as const,
+          }
+        : {
+            category: "EXPECTATION_MISMATCH" as const,
+            headline: "意図と実際が不一致",
+            summary: "試験期待と実際の結果が一致していません。",
+            severity: "medium" as const,
+          };
+    const verdict: IntentRealityVerdict = result.status === "pass" ? "aligned" : result.status === "error" ? "error" : "misaligned";
     return {
       facts: { e2e: result.status === "pass" ? "pass" : "fail", forward: "not_checked", reverse: "not_checked" },
       evaluation: { expectedReachable: test.expectations.reachable, result: result.status === "pass" ? "PASS" : result.status === "error" ? "ERROR" : "FAIL" },
@@ -135,6 +226,22 @@ export function diagnoseTrafficTest(graph: GraphModel, result: TrafficTestResult
         leg: "traffic",
         message: result.message,
         evidence: { routes: [], policies: [], natRules: [], primaryCause: "none" },
+      },
+      designIssue,
+      intentRealityGap: {
+        intentLabel: intentLabelFor({
+          source_node_id: test.source,
+          destination_node_id: test.destination,
+          protocol: test.protocol,
+          port: test.port,
+          expectations: test.expectations,
+        }),
+        realityLabel: result.status === "pass" ? "期待どおりの結果" : result.status === "error" ? "評価エラー" : "期待と異なる結果",
+        verdict,
+      },
+      designAdvice: {
+        summary: result.status === "pass" ? "追加の設計変更は不要です" : result.message,
+        actions: [test.expectations.reachable ? "意図した通信要件を再確認" : "期待した遮断要件を再確認"],
       },
       remediation: {
         summary: result.status === "pass" ? "期待どおりです" : result.message,
@@ -161,8 +268,29 @@ export function effectiveStatusForIntent(response: Extract<RouteResponse, { ok: 
     : response.status ?? "reachable";
 }
 
+export function scopeExpectationMatched(response: Extract<RouteResponse, { ok: true }>, intent: TrafficIntent) {
+  const forwardStatus = response.forward?.status ?? response.status ?? "reachable";
+  const returnStatus = response.return_path?.status;
+
+  if (intent.expectations.scope === "forward_only") {
+    return forwardStatus === "reachable";
+  }
+
+  return forwardStatus === "reachable" && returnStatus === "reachable";
+}
+
 export function causeCodeLabel(code: CauseCode) {
   return code;
+}
+
+export function designIssueTone(severity: DesignIssueSeverity): "success" | "danger" | "warn" | "muted" {
+  if (severity === "critical" || severity === "high") {
+    return "danger";
+  }
+  if (severity === "medium") {
+    return "warn";
+  }
+  return "success";
 }
 
 export function evaluationTone(result: EvaluationResult): "success" | "danger" | "warn" | "muted" {
@@ -294,6 +422,7 @@ export function shortInterfaceLabel(interfaceId: string | undefined) {
 }
 
 function pendingDiagnosis(expectedReachable: boolean): RouteDiagnosis {
+  const intentLabel = expectedReachable ? "通信要件を評価予定" : "遮断要件を評価予定";
   return {
     facts: { e2e: "not_checked", forward: "not_checked", reverse: "not_checked" },
     evaluation: { expectedReachable, result: "PENDING" },
@@ -302,6 +431,21 @@ function pendingDiagnosis(expectedReachable: boolean): RouteDiagnosis {
       leg: "none",
       message: "判定待ち",
       evidence: { routes: [], policies: [], natRules: [], primaryCause: "none" },
+    },
+    designIssue: {
+      category: "PENDING",
+      headline: "設計評価待ち",
+      summary: "まだ通信要件を評価していません。",
+      severity: "low",
+    },
+    intentRealityGap: {
+      intentLabel,
+      realityLabel: "未評価",
+      verdict: "pending",
+    },
+    designAdvice: {
+      summary: "試験または手動確認を実行してください",
+      actions: ["実行後に設計問題と改善案を表示します"],
     },
     remediation: {
       summary: "試験または手動確認を実行してください",
@@ -534,4 +678,227 @@ function failedNodeFor(graph: GraphModel, response: Extract<RouteResponse, { ok:
   return interfaceId
     ? graph.interfaces.find((interfaceItem) => interfaceItem.id === interfaceId)?.node_id
     : undefined;
+}
+
+function designIssueFor({
+  code,
+  failedLeg,
+  expectationMatched,
+  intent,
+  response,
+  evidence,
+}: {
+  code: CauseCode;
+  failedLeg: DiagnosisLeg;
+  expectationMatched: boolean;
+  intent: TrafficIntent;
+  response: Extract<RouteResponse, { ok: true }> | null;
+  evidence: Evidence;
+}): RouteDiagnosis["designIssue"] {
+  const reverseFailed = intent.expectations.scope !== "forward_only"
+    && response?.forward?.status === "reachable"
+    && response.return_path?.status !== "reachable";
+  const forwardNatMatched = Boolean(response?.forward?.matched_nat_rule_ids.length);
+  const returnLegHasConcreteCause = Boolean(
+    response?.return_path?.matched_route_ids.length
+    || response?.return_path?.matched_policy_ids.length
+    || response?.return_path?.matched_nat_rule_ids.length
+  );
+
+  if (code === "PENDING") {
+    return {
+      category: "PENDING" as const,
+      headline: "設計評価待ち",
+      summary: "まだ設計問題は判定されていません。",
+      severity: "low" as const,
+    };
+  }
+
+  if (code === "ERROR") {
+    return {
+      category: "INPUT_ERROR" as const,
+      headline: "評価入力エラー",
+      summary: "設計評価に必要な入力またはトポロジ参照が不足しています。",
+      severity: "high" as const,
+    };
+  }
+
+  if (reverseFailed && forwardNatMatched && !returnLegHasConcreteCause) {
+    return {
+      category: "NAT_RETURN_ASSUMPTION" as const,
+      headline: "往復通信として未成立",
+      summary: "アドレス変換を伴う通信としては、戻り方向の成立条件を確認してください。",
+      severity: "critical" as const,
+    };
+  }
+
+  if (reverseFailed) {
+    return {
+      category: "RETURN_PATH_GAP" as const,
+      headline: "往復通信として未成立",
+      summary: "戻り方向まで含めると、往復通信の要件を満たしていません。",
+      severity: "high" as const,
+    };
+  }
+
+  if (code === "POLICY_DENY") {
+    return {
+      category: "POLICY_ROUTE_INCONSISTENT" as const,
+      headline: "通信要件と制御方針が不一致",
+      summary: "許可を想定した通信に対して、制御方針が一致していません。",
+      severity: "high" as const,
+    };
+  }
+
+  if (code === "NO_ROUTE") {
+    return {
+      category: intent.expectations.scope === "forward_only" ? "FORWARD_ONLY_MISMATCH" : "ROUTE_DESIGN_GAP",
+      headline: intent.expectations.scope === "forward_only" ? "片方向前提の構成です" : "必要な通信経路が成立していません",
+      summary: intent.expectations.scope === "forward_only"
+        ? "片方向では成立しても、想定した通信要件との整合を確認してください。"
+        : `${legLabel(failedLeg)}に必要な経路が成立していません。`,
+      severity: "high" as const,
+    };
+  }
+
+  if (code === "BLACKHOLE") {
+    return {
+      category: "BLACKHOLE_DESIGN" as const,
+      headline: "通信を遮断する経路設計です",
+      summary: "blackhole route により、通信要件を満たさない設計になっています。",
+      severity: "high" as const,
+    };
+  }
+
+  if (code === "LOOP") {
+    return {
+      category: "LOOP_DESIGN" as const,
+      headline: "経路が循環しています",
+      summary: `${legLabel(failedLeg)}で経路が循環しており、通信要件を満たせません。`,
+      severity: "critical" as const,
+    };
+  }
+
+  if (code === "UNREACHABLE") {
+    return {
+      category: "UNREACHABLE_DESIGN" as const,
+      headline: "通信要件を満たしていません",
+      summary: `${legLabel(failedLeg)}で宛先まで到達できる設計になっていません。`,
+      severity: "high" as const,
+    };
+  }
+
+  if (code === "EXPECTATION_MISMATCH" || !expectationMatched) {
+    return {
+      category: "EXPECTATION_MISMATCH" as const,
+      headline: "意図と実際が不一致",
+      summary: "通信要件として期待した結果と、実際の通信結果が一致していません。",
+      severity: "medium" as const,
+    };
+  }
+
+  return {
+    category: "NONE" as const,
+    headline: "設計問題なし",
+    summary: "期待した通信要件と実際の結果が一致しています。",
+    severity: "low" as const,
+  };
+}
+
+function intentRealityGapFor(
+  intent: TrafficIntent,
+  effectiveStatus: RouteStatus | "ERROR",
+  verdict: IntentRealityVerdict
+) {
+  return {
+    intentLabel: intentLabelFor(intent),
+    realityLabel: realityLabelFor(intent, effectiveStatus),
+    verdict,
+  };
+}
+
+function intentLabelFor(intent: TrafficIntent) {
+  const scopeLabel = intent.expectations.scope === "forward_only" ? "片方向通信" : "往復通信";
+  const reachability = intent.expectations.reachable ? "成立する想定" : "遮断される想定";
+  return `${scopeLabel}が${reachability}`;
+}
+
+function realityLabelFor(intent: TrafficIntent, effectiveStatus: RouteStatus | "ERROR") {
+  if (effectiveStatus === "ERROR") {
+    return "評価エラー";
+  }
+  if (effectiveStatus === "reachable") {
+    return intent.expectations.scope === "forward_only" ? "往路が成立" : "往路・復路が成立";
+  }
+  if (intent.expectations.scope !== "forward_only") {
+    return "片方向のみ成立、または往復不成立";
+  }
+  if (effectiveStatus === "policy_denied") {
+    return "policy により不成立";
+  }
+  if (effectiveStatus === "no_route") {
+    return "必要経路がなく不成立";
+  }
+  if (effectiveStatus === "blackhole") {
+    return "blackhole により不成立";
+  }
+  if (effectiveStatus === "loop") {
+    return "ループにより不成立";
+  }
+  return "到達性が成立していない";
+}
+
+function designAdviceActionsFor(category: DesignIssueCategory, fallbackActions: string[]) {
+  if (category === "RETURN_PATH_GAP") {
+    return [
+      "復路を成立させるルーティング設計を追加",
+      "往路だけでなく戻り方向の next-hop と到達範囲を保証",
+    ];
+  }
+  if (category === "NAT_RETURN_ASSUMPTION") {
+    return [
+      "NAT 前提なら戻り経路を保証する構成に変更",
+      "変換後アドレスに対する戻り条件を設計に含める",
+    ];
+  }
+  if (category === "POLICY_ROUTE_INCONSISTENT") {
+    return [
+      "通信要件と policy の整合を取り直す",
+      "許可前提なら deny 条件や適用位置を見直す",
+    ];
+  }
+  if (category === "ROUTE_DESIGN_GAP" || category === "FORWARD_ONLY_MISMATCH" || category === "UNREACHABLE_DESIGN") {
+    return [
+      "必要な経路を成立させるルーティング設計を追加",
+      "通信要件に対して next-hop と到達範囲を見直す",
+    ];
+  }
+  if (category === "BLACKHOLE_DESIGN") {
+    return [
+      "遮断意図がないなら blackhole 依存を外す",
+      "通常通信へ切り替えるルート設計を追加する",
+    ];
+  }
+  if (category === "LOOP_DESIGN") {
+    return [
+      "循環する next-hop 設計を解消する",
+      "同一宛先への優先経路を一意にする",
+    ];
+  }
+  if (category === "INPUT_ERROR") {
+    return [
+      "評価対象の interface / route / link 参照を整合させる",
+      "入力値を修正して再評価する",
+    ];
+  }
+  if (category === "EXPECTATION_MISMATCH") {
+    return [
+      "通信要件の前提を再確認する",
+      "設計意図と試験条件のズレをなくす",
+    ];
+  }
+  if (category === "PENDING") {
+    return ["試験または手動確認を実行する"];
+  }
+  return fallbackActions;
 }

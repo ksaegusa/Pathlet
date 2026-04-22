@@ -1,7 +1,8 @@
 import { nodeIdsFromPath, routeSegmentsFromPath, virtualIpForInterface } from "../graphModel";
-import type { Evidence } from "../diagnosis";
+import type { Evidence, RouteDiagnosis } from "../diagnosis";
+import { diagnoseRoute, scopeExpectationMatched } from "../diagnosis";
 import { evaluationStatusLabel, type EvaluationStatus, reachabilityLabel, reachabilityScopeLabel, routeStatusLabel, trafficLabel } from "../formatters";
-import type { GraphModel, PipelineLeg, RouteMode, RouteResponse, TrafficIntent } from "../types";
+import type { GraphModel, PipelineLeg, RouteMode, RouteResponse, RouteStatus, TrafficIntent } from "../types";
 import { Badge, EmptyMessage } from "./common";
 
 export function RouteDetails({
@@ -52,13 +53,16 @@ export function RouteDetails({
   const returnStatus = response.return_path?.status;
   const effectiveStatus = effectiveRouteStatus(response, intent);
   const expectedVia = intent.expectations.via_node_id;
-  const evaluationItems = [
-    evaluationItem("到達性", reachabilityLabel(intent.expectations.reachable), routeStatusLabel(effectiveStatus), routeOutcomeDetail(response, intent)),
-    evaluationItem("判定範囲", reachabilityScopeLabel(intent.expectations.scope), reachabilityScopeLabel(intent.expectations.scope)),
-    evaluationItem("往路", "到達可能", routeStatusLabel(forwardStatus), response.forward ? legFailureDetail("往路", response.forward) : undefined),
-    ...(intent.expectations.scope === "forward_only" ? [] : response.return_path ? [evaluationItem("復路", "到達可能", routeStatusLabel(returnStatus), legFailureDetail("復路", response.return_path))] : []),
-    ...(expectedVia ? [viaEvaluationItem(expectedVia, routeNodeIds, intent.expectations.strict_path ?? false)] : []),
-  ];
+  const evaluationItems = buildEvaluationItems({
+    response,
+    intent,
+    effectiveStatus,
+    forwardStatus,
+    returnStatus,
+    routeNodeIds,
+    expectedVia,
+  });
+  const diagnosis = diagnoseRoute(graph, response, intent);
 
   return (
     <div className="grid gap-3">
@@ -77,7 +81,7 @@ export function RouteDetails({
         ) : null}
       </div>
 
-      <RouteDecisionSummary graph={graph} intent={intent} response={response} />
+      <RouteDecisionSummary graph={graph} intent={intent} response={response} diagnosis={diagnosis} />
 
       <EvaluationList
         items={evaluationItems}
@@ -97,14 +101,72 @@ type EvaluationItem = {
   status: EvaluationStatus;
 };
 
+function buildEvaluationItems({
+  response,
+  intent,
+  effectiveStatus,
+  forwardStatus,
+  returnStatus,
+  routeNodeIds,
+  expectedVia,
+}: {
+  response: Extract<RouteResponse, { ok: true }>;
+  intent: TrafficIntent;
+  effectiveStatus: RouteStatus;
+  forwardStatus: RouteStatus;
+  returnStatus: RouteStatus | undefined;
+  routeNodeIds: string[];
+  expectedVia: string | undefined;
+}) {
+  const items: EvaluationItem[] = [
+    evaluationItem(
+      "要件評価",
+      `${reachabilityLabel(intent.expectations.reachable)} / ${reachabilityScopeLabel(intent.expectations.scope)}`,
+      `${routeStatusLabel(effectiveStatus)} / ${actualScopeLabel(response, intent)}`,
+      routeOutcomeDetail(response, intent),
+      routeEvaluationStatus(response, intent, effectiveStatus)
+    ),
+  ];
+
+  if (forwardStatus !== "reachable") {
+    items.push(
+      evaluationItem(
+        "往路",
+        "到達可能",
+        routeStatusLabel(forwardStatus),
+        response.forward ? legFailureDetail("往路", response.forward) : undefined
+      )
+    );
+  }
+
+  if (intent.expectations.scope !== "forward_only" && response.return_path && returnStatus !== "reachable") {
+    items.push(
+      evaluationItem(
+        "復路",
+        "到達可能",
+        routeStatusLabel(returnStatus),
+        legFailureDetail("復路", response.return_path)
+      )
+    );
+  }
+
+  if (expectedVia) {
+    items.push(viaEvaluationItem(expectedVia, routeNodeIds, intent.expectations.strict_path ?? false));
+  }
+
+  return items;
+}
+
 function RouteDecisionSummary({
   graph,
   intent,
   response,
+  diagnosis,
 }: {
   graph: GraphModel;
   intent: TrafficIntent;
   response: Extract<RouteResponse, { ok: true }>;
+  diagnosis: RouteDiagnosis;
 }) {
   const routeStatus = response.status ?? "reachable";
   const effectiveStatus = effectiveRouteStatus(response, intent);
@@ -116,7 +178,6 @@ function RouteDecisionSummary({
   const returnNodes = nodeIdsFromPath(returnPath, graph);
   const returnStatus = response.return_path?.status;
   const isReturnFailure = response.forward?.status === "reachable" && returnStatus && returnStatus !== "reachable";
-  const decisionHeadline = routeDecisionHeadline(response, intent);
   const toneClass = expectationMatched
     ? "rounded-md border border-teal-200 bg-teal-50 p-3"
     : "rounded-md border border-red-200 bg-red-50 p-3";
@@ -135,51 +196,26 @@ function RouteDecisionSummary({
       </div>
       <div className="mt-2 grid gap-1.5">
         <SummaryRow label="通信要件" value={`${intent.source_node_id} -> ${intent.destination_node_id} / ${trafficLabel(intent)} / ${reachabilityLabel(intent.expectations.reachable)} / ${reachabilityScopeLabel(intent.expectations.scope)}`} />
+        <SummaryRow label="設計問題" value={diagnosis.designIssue.headline} />
+        <SummaryRow label="意図" value={diagnosis.intentRealityGap.intentLabel} />
+        <SummaryRow label="実際" value={diagnosis.intentRealityGap.realityLabel} />
         <SummaryRow label="往路" value={forwardNodes.length ? forwardNodes.join(" -> ") : "経路情報なし"} />
         {intent.expectations.scope === "forward_only" ? null : response.return_path ? <SummaryRow label="復路" value={returnNodes.length ? returnNodes.join(" -> ") : "経路情報なし"} /> : null}
-        <SummaryRow label="理由" value={decisionHeadline} />
-        <SummaryEvidenceRows label="参照情報" items={routeEvidenceSummary(response)} />
+        <SummaryRow label="設計評価" value={diagnosis.designIssue.summary} />
+        <SummaryRow label="改善案" value={diagnosis.designAdvice.summary} />
+        <SummaryEvidenceRows
+          label="参照情報"
+          items={routeEvidenceSummary(response)}
+          emphasize={!expectationMatched}
+        />
       </div>
       {intent.expectations.scope !== "forward_only" && isReturnFailure ? (
         <p className={`mt-2 ${textClass}`}>
-          往路だけを見ると到達していますが、E2E では復路まで含めて判定しています。
+          往路だけを見ると到達していますが、設計評価では復路まで含めて判定しています。
         </p>
       ) : null}
     </div>
   );
-}
-
-function routeDecisionHeadline(response: Extract<RouteResponse, { ok: true }>, intent: TrafficIntent) {
-  const routeStatus = effectiveRouteStatus(response, intent);
-  const actualReachable = routeStatus === "reachable";
-  if (actualReachable && !intent.expectations.reachable) {
-    return intent.expectations.scope === "forward_only"
-      ? "到達不可を期待しましたが、往路は到達できます。"
-      : "到達不可を期待しましたが、往路・復路とも到達できます。";
-  }
-  if (actualReachable) {
-    return intent.expectations.scope === "forward_only"
-      ? "往路が到達できるためOKです。"
-      : "往路・復路とも到達できるためOKです。";
-  }
-
-  const failedLegLabel = intent.expectations.scope === "forward_only" || response.forward?.status !== "reachable" ? "往路" : response.return_path?.status !== "reachable" ? "復路" : "通信";
-  if (routeStatus === "no_route") {
-    return `${failedLegLabel}に必要な経路がないためNGです。`;
-  }
-  if (routeStatus === "policy_denied") {
-    return `${failedLegLabel}でPolicy denyに一致したためNGです。`;
-  }
-  if (routeStatus === "loop") {
-    return `${failedLegLabel}でルーティングループを検出したためNGです。`;
-  }
-  if (routeStatus === "blackhole") {
-    return `${failedLegLabel}でblackhole routeに一致したためNGです。`;
-  }
-  if (routeStatus === "unreachable") {
-    return `${failedLegLabel}で宛先まで到達できないためNGです。`;
-  }
-  return `通信は${routeStatusLabel(routeStatus)}です。`;
 }
 
 function effectiveRouteStatus(response: Extract<RouteResponse, { ok: true }>, intent: TrafficIntent) {
@@ -197,15 +233,23 @@ function SummaryRow({ label, value }: { label: string; value: string }) {
   );
 }
 
-function SummaryEvidenceRows({ label, items }: { label: string; items: EvidenceItem[] }) {
+function SummaryEvidenceRows({
+  label,
+  items,
+  emphasize,
+}: {
+  label: string;
+  items: EvidenceItem[];
+  emphasize: boolean;
+}) {
   return (
     <div className="grid gap-1 text-xs sm:grid-cols-[5rem_minmax(0,1fr)]">
       <span className="font-semibold text-zinc-700">{label}</span>
       <div className="grid min-w-0 gap-1">
         {items.map((item) => (
           <div className="grid gap-1 sm:grid-cols-[4rem_minmax(0,1fr)]" key={item.label}>
-            <span className={item.primary ? "font-semibold uppercase text-red-700" : "font-semibold uppercase text-zinc-500"}>{item.label}</span>
-            <span className={item.primary ? "min-w-0 break-words font-mono font-semibold text-red-800" : "min-w-0 break-words font-mono text-zinc-700"}>{item.value}</span>
+            <span className={item.primary && emphasize ? "font-semibold uppercase text-red-700" : "font-semibold uppercase text-zinc-500"}>{item.label}</span>
+            <span className={item.primary && emphasize ? "min-w-0 break-words font-mono font-semibold text-red-800" : "min-w-0 break-words font-mono text-zinc-700"}>{item.value}</span>
           </div>
         ))}
       </div>
@@ -231,9 +275,9 @@ function PipelineDetails({
   return (
     <div className="grid gap-2">
       <div>
-        <h3 className="text-sm font-semibold text-zinc-950">経路と処理</h3>
+        <h3 className="text-sm font-semibold text-zinc-950">経路と技術詳細</h3>
         <p className="mt-1 text-xs text-zinc-500">
-          往路と復路それぞれのパス、ルート参照、Policy、NAT をまとめて表示します。
+          往路と復路それぞれのパス、および参照した route、policy、NAT の情報を表示します。
         </p>
       </div>
       <div className="grid gap-2 lg:grid-cols-2">
@@ -373,15 +417,15 @@ function evaluationItem(
   label: string,
   expected: string,
   actual: string,
-  detail?: string
+  detail?: string,
+  status?: EvaluationStatus
 ): EvaluationItem {
-  const status = expected === actual ? "OK" : "NG";
   return {
     label,
     expected,
     actual,
     detail,
-    status,
+    status: status ?? (expected === actual ? "OK" : "NG"),
   };
 }
 
@@ -399,18 +443,47 @@ function routeOutcomeDetail(response: Extract<RouteResponse, { ok: true }>, inte
   const forwardStatus = response.forward?.status;
   const returnStatus = response.return_path?.status;
   if (forwardStatus && forwardStatus !== "reachable") {
-    return `往路が ${routeStatusLabel(forwardStatus)} です。宛先まで到達できていません。`;
+    return `往路が ${routeStatusLabel(forwardStatus)} のため、通信要件を満たしていません。`;
   }
   if (intent.expectations.scope === "forward_only") {
-    return "片道判定のため、復路はOK/NG判定に含めません。";
+    return "片道要件なので、往路の成立だけで判定しています。";
   }
   if (returnStatus && returnStatus !== "reachable") {
-    return `往路は到達していますが、復路が ${routeStatusLabel(returnStatus)} です。戻り通信の経路、Policy、NAT戻しを確認してください。`;
+    return `往路は成立していますが、復路が ${routeStatusLabel(returnStatus)} のため往復要件は未成立です。`;
   }
   if ((response.status ?? "reachable") !== "reachable") {
     return `通信は ${routeStatusLabel(response.status)} と判定されました。`;
   }
   return "往路と復路の両方が到達可能です。";
+}
+
+function actualScopeLabel(response: Extract<RouteResponse, { ok: true }>, intent: TrafficIntent) {
+  const forwardStatus = response.forward?.status ?? response.status ?? "reachable";
+  const returnStatus = response.return_path?.status;
+
+  if (intent.expectations.scope === "forward_only") {
+    return forwardStatus === "reachable" ? "片道成立" : "片道不成立";
+  }
+
+  if (forwardStatus === "reachable" && returnStatus === "reachable") {
+    return "往復成立";
+  }
+  if (forwardStatus === "reachable") {
+    return "往路のみ成立";
+  }
+  return "往復不成立";
+}
+
+function routeEvaluationStatus(
+  response: Extract<RouteResponse, { ok: true }>,
+  intent: TrafficIntent,
+  effectiveStatus: RouteStatus
+): EvaluationStatus {
+  const actualReachable = effectiveStatus === "reachable";
+  const expectationMatched =
+    intent.expectations.reachable === actualReachable
+    && scopeExpectationMatched(response, intent);
+  return expectationMatched ? "OK" : "NG";
 }
 
 function legFailureDetail(label: string, leg: PipelineLeg) {

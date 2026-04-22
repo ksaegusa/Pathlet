@@ -7,6 +7,7 @@
     "build:wasm": "cd ../crates/wasm && wasm-pack build --target web --out-dir ../../web/src/wasm",
     "dev": "vite --host 0.0.0.0",
     "build": "npm run build:wasm && tsc && vite build",
+    "test": "node --import tsx --test src/**/*.test.ts",
     "preview": "vite preview --host 0.0.0.0"
   },
   "dependencies": {
@@ -25,6 +26,7 @@
   },
   "devDependencies": {
     "@types/react": "^19.2.14",
-    "@types/react-dom": "^19.2.3"
+    "@types/react-dom": "^19.2.3",
+    "tsx": "^4.21.0"
   }
 }

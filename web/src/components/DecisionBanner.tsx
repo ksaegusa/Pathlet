@@ -2,6 +2,7 @@ import {
   actualReachabilityLabel,
   causeCodeLabel,
   causeTone,
+  designIssueTone,
   evaluationTone,
   factLabel,
   factTone,
@@ -53,18 +54,34 @@ export function DecisionBanner({
         </div>
       </div>
       <div className="min-w-0 rounded-md border border-zinc-200 bg-white p-3">
-        <div className="text-xs font-semibold uppercase text-zinc-500">要件判定</div>
+        <div className="text-xs font-semibold uppercase text-zinc-500">設計評価</div>
         <div className="mt-2 flex flex-wrap gap-2">
           <Badge tone={evaluationTone(diagnosis.evaluation.result)}>{diagnosis.evaluation.result}</Badge>
           <Badge tone={diagnosis.evaluation.expectedReachable ? "success" : "danger"}>
             期待 {diagnosis.evaluation.expectedReachable ? "到達可能" : "到達不可"}
           </Badge>
+          <Badge tone={designIssueTone(diagnosis.designIssue.severity)}>{diagnosis.designIssue.severity}</Badge>
         </div>
-        <div className="mt-2 text-sm font-semibold text-zinc-800">{sourceLabel}</div>
-        <div className="mt-3 text-xs font-semibold uppercase text-zinc-500">修正ポイント</div>
-        <div className="mt-1 text-sm font-semibold text-zinc-950">{diagnosis.remediation.summary}</div>
+        <div className="mt-2 text-sm font-semibold text-zinc-950">{diagnosis.designIssue.headline}</div>
+        <div className="mt-1 text-sm text-zinc-700">{diagnosis.designIssue.summary}</div>
+        <div className="mt-3 grid gap-1 text-xs">
+          <div className="grid gap-1 sm:grid-cols-[5rem_minmax(0,1fr)]">
+            <span className="font-semibold uppercase text-zinc-500">意図</span>
+            <span className="min-w-0 break-words text-zinc-700">{diagnosis.intentRealityGap.intentLabel}</span>
+          </div>
+          <div className="grid gap-1 sm:grid-cols-[5rem_minmax(0,1fr)]">
+            <span className="font-semibold uppercase text-zinc-500">実際</span>
+            <span className="min-w-0 break-words text-zinc-700">{diagnosis.intentRealityGap.realityLabel}</span>
+          </div>
+          <div className="grid gap-1 sm:grid-cols-[5rem_minmax(0,1fr)]">
+            <span className="font-semibold uppercase text-zinc-500">要件</span>
+            <span className="min-w-0 break-words text-zinc-700">{sourceLabel}</span>
+          </div>
+        </div>
+        <div className="mt-3 text-xs font-semibold uppercase text-zinc-500">改善案</div>
+        <div className="mt-1 text-sm font-semibold text-zinc-950">{diagnosis.designAdvice.summary}</div>
         <ul className="mt-2 grid gap-1 text-xs text-zinc-600">
-          {diagnosis.remediation.actions.map((action) => (
+          {diagnosis.designAdvice.actions.map((action) => (
             <li key={action}>- {action}</li>
           ))}
         </ul>
@@ -75,20 +92,29 @@ export function DecisionBanner({
         ) : null}
       </div>
       <div className="min-w-0 rounded-md border border-zinc-200 bg-white p-3">
-        <div className="text-xs font-semibold uppercase text-zinc-500">原因</div>
+        <div className="text-xs font-semibold uppercase text-zinc-500">技術詳細</div>
         <div className="mt-2 flex flex-wrap gap-2">
-          <Badge tone={causeTone(diagnosis.cause.code, diagnosis.evaluation.result)}>{causeCodeLabel(diagnosis.cause.code)}</Badge>
+          <Badge tone={causeTone(diagnosis.cause.code, diagnosis.evaluation.result)}>Technical Cause: {causeCodeLabel(diagnosis.cause.code)}</Badge>
           <Badge tone="muted">{diagnosis.cause.leg}</Badge>
           <Badge tone="muted">{diagnosis.remediation.confidence}</Badge>
         </div>
         <div className="mt-2 text-sm font-semibold text-zinc-950">{diagnosis.cause.message}</div>
-        <EvidenceList evidence={diagnosis.cause.evidence} />
+        <EvidenceList
+          evidence={diagnosis.cause.evidence}
+          emphasize={diagnosis.evaluation.result !== "PASS"}
+        />
       </div>
     </div>
   );
 }
 
-function EvidenceList({ evidence }: { evidence: RouteDiagnosis["cause"]["evidence"] }) {
+function EvidenceList({
+  evidence,
+  emphasize,
+}: {
+  evidence: RouteDiagnosis["cause"]["evidence"];
+  emphasize: boolean;
+}) {
   const items = [
     {
       label: "routes",
@@ -111,8 +137,8 @@ function EvidenceList({ evidence }: { evidence: RouteDiagnosis["cause"]["evidenc
     <div className="mt-2 grid gap-1 text-xs">
       {items.map((item) => (
         <div className="grid gap-1 sm:grid-cols-[4rem_minmax(0,1fr)]" key={item.label}>
-          <span className={cn("font-semibold uppercase", item.primary ? "text-red-700" : "text-zinc-500")}>{item.label}</span>
-          <span className={cn("min-w-0 break-words font-mono", item.primary ? "font-semibold text-red-800" : "text-zinc-700")}>{item.value}</span>
+          <span className={cn("font-semibold uppercase", item.primary && emphasize ? "text-red-700" : "text-zinc-500")}>{item.label}</span>
+          <span className={cn("min-w-0 break-words font-mono", item.primary && emphasize ? "font-semibold text-red-800" : "text-zinc-700")}>{item.value}</span>
         </div>
       ))}
     </div>

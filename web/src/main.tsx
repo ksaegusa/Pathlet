@@ -347,8 +347,12 @@ function App() {
       `- FAIL: ${failCount}`,
       `- ERROR: ${errorCount}`,
       "",
-      "| E2E | FWD | REV | Evaluation | Cause | Test | Source | Destination | Protocol | Scope | Expected | Message |",
-      "| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |",
+      "## Review Summary",
+      "",
+      "- This report focuses on design review output: intent, reality, design issue, and technical cause.",
+      "",
+      "| E2E | FWD | REV | Evaluation | Intent | Reality | Design Issue | Technical Cause | Advice | Test | Source | Destination | Protocol | Scope | Expected | Message |",
+      "| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |",
       ...trafficTests.map((test) => {
         const result = trafficTestResults[test.id];
         const diagnosis = diagnoseTrafficTest(graph, result, test);
@@ -357,14 +361,18 @@ function App() {
           factLabel(diagnosis.facts.forward),
           factLabel(diagnosis.facts.reverse),
           diagnosis.evaluation.result,
+          markdownCell(diagnosis.intentRealityGap.intentLabel),
+          markdownCell(diagnosis.intentRealityGap.realityLabel),
+          markdownCell(diagnosis.designIssue.headline),
           diagnosis.cause.code,
+          markdownCell(diagnosis.designAdvice.summary),
           markdownCell(test.name || test.id),
           markdownCell(test.source),
           markdownCell(test.destination),
           markdownCell(test.port ? `${test.protocol.toUpperCase()}/${test.port}` : test.protocol.toUpperCase()),
           test.expectations.scope === "forward_only" ? "片道" : "往復",
           test.expectations.reachable ? "到達可能" : "到達不可",
-          markdownCell(result?.message ?? diagnosis.cause.message),
+          markdownCell(result?.message ?? diagnosis.designIssue.summary),
         ].join(" | ");
       }).map((row) => `| ${row} |`),
       "",
@@ -1215,7 +1223,7 @@ function App() {
               <CardHeader title="経路詳細" description={`現在のcost: ${selectedCost}`} />
               <div className="p-4 pt-0">
                 <details>
-                  <summary className="cursor-pointer text-sm font-semibold text-zinc-700">routes / policy / NAT の詳細を開く</summary>
+                  <summary className="cursor-pointer text-sm font-semibold text-zinc-700">経路と技術詳細を開く</summary>
                   <div className="mt-3">
                     <RouteDetails
                       graph={effectiveGraph}

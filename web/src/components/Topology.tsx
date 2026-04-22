@@ -227,6 +227,10 @@ export function Topology({
         const routeFrom = routeFromNodeId ? layout.nodes.get(routeFromNodeId) : undefined;
         const routeTo = routeToNodeId ? layout.nodes.get(routeToNodeId) : undefined;
         const routeGeometry = routeFrom && routeTo ? linkGeometry(routeFrom, routeTo) : geometry;
+        const routePath = routeDirection?.from_interface === link.to_interface &&
+          routeDirection.to_interface === link.from_interface
+          ? routeGeometry.reversePath
+          : routeGeometry.path;
         return (
           <g key={link.id}>
             <path
@@ -245,7 +249,7 @@ export function Topology({
             />
             {isRoute ? (
               <circle className="route-packet" r={routePacketRadius}>
-                <animateMotion dur="1.6s" path={routeGeometry.path} repeatCount="indefinite" />
+                <animateMotion dur="1.6s" path={routePath} repeatCount="indefinite" />
               </circle>
             ) : null}
           </g>
