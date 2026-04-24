@@ -375,13 +375,13 @@ export function nodeIdsFromRoute(routeResponse: RouteResponse | null, graph: Gra
   );
 }
 
-export function loopLinkIdsFromRoute(routeResponse: RouteResponse | null, graph: GraphModel) {
-  const loopLinkIds = new Set<string>();
-  if (!routeResponse?.ok) {
-    return loopLinkIds;
+export function problemLinkIdsFromRoute(routeResponse: RouteResponse | null, graph: GraphModel) {
+  const problemLinkIds = new Set<string>();
+  if (!routeResponse?.ok || routeResponse.status !== "loop") {
+    return problemLinkIds;
   }
   for (const linkId of routeResponse.loop_link_ids ?? []) {
-    loopLinkIds.add(linkId);
+    problemLinkIds.add(linkId);
   }
 
   const interfaceById = new Map(
@@ -410,7 +410,7 @@ export function loopLinkIdsFromRoute(routeResponse: RouteResponse | null, graph:
             ? linkByEdge.get(edgeKey(fromInterfaceId, toInterfaceId))
             : undefined;
           if (link) {
-            loopLinkIds.add(link.id);
+            problemLinkIds.add(link.id);
           }
         }
       }
@@ -419,7 +419,7 @@ export function loopLinkIdsFromRoute(routeResponse: RouteResponse | null, graph:
     });
   }
 
-  return loopLinkIds;
+  return problemLinkIds;
 }
 
 function compactInternalHops(path: string[], graph: GraphModel) {

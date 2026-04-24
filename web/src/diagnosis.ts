@@ -517,7 +517,7 @@ function messageFor(code: CauseCode, failedLeg: DiagnosisLeg, expectationMatched
     return `${legLabel(failedLeg)}の次ホップなし`;
   }
   if (code === "LOOP") {
-    return `${legLabel(failedLeg)}でループ`;
+    return `${legLabel(failedLeg)}で経路が循環`;
   }
   if (code === "BLACKHOLE") {
     return `${legLabel(failedLeg)}でblackhole`;
@@ -843,7 +843,7 @@ function realityLabelFor(intent: TrafficIntent, effectiveStatus: RouteStatus | "
     return "blackhole により不成立";
   }
   if (effectiveStatus === "loop") {
-    return "ループにより不成立";
+    return "経路循環により不成立";
   }
   return "到達性が成立していない";
 }

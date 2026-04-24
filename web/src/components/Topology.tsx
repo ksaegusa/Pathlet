@@ -19,7 +19,7 @@ export function Topology({
   layout,
   interfaceDisplayMode,
   routeEdgeDirections,
-  loopLinkIds,
+  problemLinkIds,
   routeInterfaceIds,
   routeNodeIds,
   fromInterface,
@@ -37,7 +37,7 @@ export function Topology({
   layout: TopologyLayoutModel;
   interfaceDisplayMode: InterfaceDisplayMode;
   routeEdgeDirections: Map<string, RouteEdgeDirection>;
-  loopLinkIds: Set<string>;
+  problemLinkIds: Set<string>;
   routeInterfaceIds: Set<string>;
   routeNodeIds: Set<string>;
   fromInterface: string;
@@ -101,8 +101,15 @@ export function Topology({
     return `${label.slice(0, Math.max(3, maxChars - 1))}…`;
   }
 
-  function pointFromEvent(event: ReactPointerEvent<SVGSVGElement>) {
-    const svg = event.currentTarget;
+  function pointFromEvent(event: ReactPointerEvent<Element>) {
+    const svg = event.currentTarget instanceof SVGSVGElement
+      ? event.currentTarget
+      : event.currentTarget instanceof SVGElement
+        ? event.currentTarget.ownerSVGElement
+        : null;
+    if (!svg) {
+      return { x: 0, y: 0 };
+    }
     const point = svg.createSVGPoint();
     const matrix = svg.getScreenCTM();
     point.x = event.clientX;
@@ -139,7 +146,6 @@ export function Topology({
     dragRef.current = null;
     setDraggingNodeId(null);
   }
-
   return (
     <svg
       className={cn("topology block w-full", `density-${layout.density}`)}
@@ -215,8 +221,8 @@ export function Topology({
 
         const routeDirection = routeEdgeDirections.get(edgeKey(link.from_interface, link.to_interface));
         const isRoute = Boolean(routeDirection);
-        const isLoop = loopLinkIds.has(link.id);
-        const isDimmed = hasRoute && !isRoute && !isLoop;
+        const hasProblem = problemLinkIds.has(link.id);
+        const isDimmed = hasRoute && !isRoute && !hasProblem;
         const geometry = linkGeometry(from, to);
         const routeFromNodeId = routeDirection
           ? interfaceById.get(routeDirection.from_interface)?.node_id
@@ -238,7 +244,7 @@ export function Topology({
                 "topology-link",
                 link.active ? "active" : "inactive",
                 isRoute && "route",
-                isLoop && "loop",
+                hasProblem && "problem",
                 isDimmed && "dimmed",
                 layout.density === "crowded" && isDimmed && "context"
               )}

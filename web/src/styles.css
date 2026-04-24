@@ -31,6 +31,7 @@ select {
 .topology {
   touch-action: none;
   user-select: none;
+  -webkit-user-select: none;
 }
 
 .topology-group {
@@ -95,7 +96,7 @@ select {
   stroke-width: 7;
 }
 
-.topology-link.loop {
+.topology-link.problem {
   filter: drop-shadow(0 0 8px rgb(239 68 68 / 0.55));
   stroke: #ef4444;
   stroke-width: 12;
@@ -188,6 +189,7 @@ select {
   font-size: 10px;
   font-weight: 800;
   user-select: none;
+  -webkit-user-select: none;
 }
 
 .topology.density-dense .node-label {
