@@ -20,7 +20,7 @@ export function routeStatusLabel(status: RouteStatus | undefined) {
     return "到達不可";
   }
   if (status === "loop") {
-    return "ループ";
+    return "経路循環";
   }
   if (status === "no_route") {
     return "経路なし";
@@ -51,7 +51,7 @@ export function modalTitle(activeModal: ActiveModal) {
   if (activeModal === "test") {
     return "試験詳細";
   }
-  return "トポロジ編集";
+  return "構成編集";
 }
 
 export function testResultLabel(status: TrafficTestResultModel["status"] | undefined) {

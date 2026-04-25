@@ -498,7 +498,7 @@ function legFailureDetail(label: string, leg: PipelineLeg) {
     return `${label}でPolicy denyに一致しました。${leg.matched_policy_ids.join(" -> ")}`;
   }
   if (leg.status === "loop") {
-    return `${label}でループを検出しました。${path}`;
+    return `${label}で経路の循環を検出しました。${path}`;
   }
   if (leg.status === "blackhole") {
     return `${label}でblackhole routeに一致しました。${path}`;

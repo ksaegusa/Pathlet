@@ -1,4 +1,4 @@
-import { ChangeEvent, type ReactNode, useEffect, useMemo, useState } from "react";
+import { ChangeEvent, useEffect, useMemo, useState } from "react";
 import { createRoot } from "react-dom/client";
 import { FileDown, FileJson, ListChecks, Network, Shield } from "lucide-react";
 import { stringify as stringifyYaml } from "yaml";
@@ -30,8 +30,8 @@ import {
   interfaceIdsFromPath,
   linkEndpointInterfaceId,
   nodeCapabilities,
-  loopLinkIdsFromRoute,
   nodeIdsFromRoute,
+  problemLinkIdsFromRoute,
   parseTestSuiteText,
   parseTopologyText,
   policyRulesFromGraph,
@@ -110,11 +110,7 @@ function App() {
   const [trafficTests, setTrafficTests] = useState<TrafficTestRecordModel[]>(exampleTrafficTests);
   const [trafficTestResults, setTrafficTestResults] = useState<Record<string, TrafficTestResultModel>>({});
   const [selectedTrafficTestId, setSelectedTrafficTestId] = useState<string | null>(exampleTrafficTests[0]?.id ?? null);
-  const [openRuleSections, setOpenRuleSections] = useState({
-    routing: true,
-    policy: false,
-    nat: false,
-  });
+  const [activeRuleTab, setActiveRuleTab] = useState<"routing" | "policy" | "nat">("routing");
 
   const effectiveGraph = useMemo(
     () => applyRuntimeState(graph, downNodeIds, downInterfaceIds),
@@ -171,7 +167,7 @@ function App() {
     ? `試験: ${selectedTrafficTest.name || selectedTrafficTest.id}`
     : "手動条件";
   const displayRouteEdgeDirections = useMemo(() => routeDirectionsFromPath(displayResponse, effectiveGraph), [displayResponse, effectiveGraph]);
-  const displayLoopLinkIds = useMemo(() => loopLinkIdsFromRoute(displayResponse, effectiveGraph), [displayResponse, effectiveGraph]);
+  const displayProblemLinkIds = useMemo(() => problemLinkIdsFromRoute(displayResponse, effectiveGraph), [displayResponse, effectiveGraph]);
   const displayRouteInterfaceIds = useMemo(() => interfaceIdsFromPath(displayResponse), [displayResponse]);
   const displayRouteNodeIds = useMemo(() => nodeIdsFromRoute(displayResponse, effectiveGraph), [displayResponse, effectiveGraph]);
   const nodeStates = useMemo(
@@ -544,6 +540,46 @@ function App() {
     void calculateRoute(applyRuntimeState(nextGraph, downNodeIds, downInterfaceIds), fromInterface, toInterface);
   }
 
+  function applyGraphAfterStructureChange(nextGraph: GraphModel, statusMessage: string) {
+    const nextInterfaces = nextGraph.interfaces;
+    const fallbackFromInterface = nextInterfaces.some((interfaceItem) => interfaceItem.id === fromInterface)
+      ? fromInterface
+      : nextInterfaces[0]?.id ?? "";
+    const fallbackToInterface = nextInterfaces.some((interfaceItem) => interfaceItem.id === toInterface)
+      ? toInterface
+      : nextInterfaces.at(-1)?.id ?? fallbackFromInterface;
+
+    setGraph(nextGraph);
+    setDownNodeIds((current) => new Set([...current].filter((nodeId) => nextGraph.nodes.some((node) => node.id === nodeId))));
+    setDownInterfaceIds((current) => new Set([...current].filter((interfaceId) => nextInterfaces.some((interfaceItem) => interfaceItem.id === interfaceId))));
+    setFromInterface(fallbackFromInterface);
+    setToInterface(fallbackToInterface);
+    setManualSourceIp(interfaceHostIp(nextGraph, fallbackFromInterface));
+    setManualDestinationIp(interfaceHostIp(nextGraph, fallbackToInterface));
+    setStatus(statusMessage);
+
+    if (!nextInterfaces.length) {
+      setRouteResponse(null);
+      return;
+    }
+    void calculateRoute(
+      applyRuntimeState(nextGraph, new Set([...downNodeIds].filter((nodeId) => nextGraph.nodes.some((node) => node.id === nodeId))), new Set([...downInterfaceIds].filter((interfaceId) => nextInterfaces.some((interfaceItem) => interfaceItem.id === interfaceId)))),
+      fallbackFromInterface,
+      fallbackToInterface
+    );
+  }
+
+  function deleteLink(linkId: string) {
+    const nextGraph = {
+      ...graph,
+      links: graph.links.filter((link) => link.id !== linkId),
+    };
+    const remainingLinks = nextGraph.links;
+    setSelectedLinkId((current) => current === linkId ? remainingLinks[0]?.id ?? "" : current);
+    setActiveModal((current) => current === "link" && selectedLinkId === linkId ? null : current);
+    applyGraphAfterStructureChange(nextGraph, `${linkId} を削除しました`);
+  }
+
   function updateNode(nodeId: string, patch: Partial<GraphModel["nodes"][number]>) {
     const nextGraph = {
       ...graph,
@@ -562,6 +598,61 @@ function App() {
     };
     setGraph(nextGraph);
     void calculateRoute(applyRuntimeState(nextGraph, downNodeIds, downInterfaceIds), fromInterface, toInterface);
+  }
+
+  function addInterface(nodeId: string) {
+    const node = graph.nodes.find((nodeItem) => nodeItem.id === nodeId);
+    if (!node) {
+      setStatus(`${nodeId} が見つかりません`);
+      return;
+    }
+    const interfaces = graph.interfaces.filter((interfaceItem) => interfaceItem.node_id === nodeId);
+    const maxInterfaces = nodeCapabilities(node).maxInterfaces;
+    if (typeof maxInterfaces === "number" && interfaces.length >= maxInterfaces) {
+      setStatus(`${nodeId} はこれ以上インターフェースを追加できません`);
+      return;
+    }
+
+    let suffix = interfaces.length + 1;
+    let interfaceId = `${nodeId}-eth${suffix}`;
+    while (graph.interfaces.some((interfaceItem) => interfaceItem.id === interfaceId)) {
+      suffix += 1;
+      interfaceId = `${nodeId}-eth${suffix}`;
+    }
+
+    const nextGraph = {
+      ...graph,
+      interfaces: [...graph.interfaces, { id: interfaceId, node_id: nodeId }],
+    };
+    setGraph(nextGraph);
+    setStatus(`${interfaceId} を追加しました`);
+    void calculateRoute(applyRuntimeState(nextGraph, downNodeIds, downInterfaceIds), fromInterface, toInterface);
+  }
+
+  function deleteInterface(interfaceId: string) {
+    const nextGraph: GraphModel = {
+      ...graph,
+      interfaces: graph.interfaces.filter((interfaceItem) => interfaceItem.id !== interfaceId),
+      links: graph.links.filter(
+        (link) => link.from_interface !== interfaceId && link.to_interface !== interfaceId
+      ),
+      routes: (graph.routes ?? []).map((route) =>
+        route.egress_interface === interfaceId ? { ...route, egress_interface: undefined } : route
+      ),
+      policies: (graph.policies ?? []).map((policy) =>
+        policy.interface_id === interfaceId ? { ...policy, interface_id: undefined } : policy
+      ),
+      nat_rules: (graph.nat_rules ?? []).map((rule) =>
+        rule.interface_id === interfaceId ? { ...rule, interface_id: undefined } : rule
+      ),
+      acl_attachments: (graph.acl_attachments ?? []).map((attachment) =>
+        attachment.interface_id === interfaceId ? { ...attachment, interface_id: undefined } : attachment
+      ),
+    };
+    setSelectedLinkId((current) =>
+      nextGraph.links.some((link) => link.id === current) ? current : nextGraph.links[0]?.id ?? ""
+    );
+    applyGraphAfterStructureChange(nextGraph, `${interfaceId} を削除しました`);
   }
 
   function selectInterface(interfaceId: string) {
@@ -612,6 +703,39 @@ function App() {
     setNewLinkTo(nodeId);
     setStatus(`${nodeId} を追加しました`);
     void calculateRoute(applyRuntimeState(nextGraph, downNodeIds, downInterfaceIds), fromInterface, toInterface);
+  }
+
+  function deleteNode(nodeId: string) {
+    const interfaceIds = new Set(
+      graph.interfaces
+        .filter((interfaceItem) => interfaceItem.node_id === nodeId)
+        .map((interfaceItem) => interfaceItem.id)
+    );
+    const nextGraph: GraphModel = {
+      ...graph,
+      nodes: graph.nodes.filter((node) => node.id !== nodeId),
+      interfaces: graph.interfaces.filter((interfaceItem) => interfaceItem.node_id !== nodeId),
+      links: graph.links.filter(
+        (link) => !interfaceIds.has(link.from_interface) && !interfaceIds.has(link.to_interface)
+      ),
+      virtual_ips: (graph.virtual_ips ?? []).filter(
+        (virtualIp) =>
+          virtualIp.service_node_id !== nodeId &&
+          virtualIp.active_node_id !== nodeId &&
+          !virtualIp.standby_node_ids.includes(nodeId)
+      ),
+      nat_rules: (graph.nat_rules ?? []).filter((rule) => rule.node_id !== nodeId),
+      routes: (graph.routes ?? []).filter((route) => route.node_id !== nodeId),
+      policies: (graph.policies ?? []).filter((policy) => policy.node_id !== nodeId),
+      routing: (graph.routing ?? []).filter((routing) => routing.node_id !== nodeId),
+      acl_attachments: (graph.acl_attachments ?? []).filter((attachment) => attachment.node_id !== nodeId),
+    };
+    setSelectedNodeId((current) => current === nodeId ? nextGraph.nodes[0]?.id ?? "" : current);
+    setSelectedLinkId((current) =>
+      nextGraph.links.some((link) => link.id === current) ? current : nextGraph.links[0]?.id ?? ""
+    );
+    setActiveModal((current) => current === "node" && selectedNodeId === nodeId ? null : current);
+    applyGraphAfterStructureChange(nextGraph, `${nodeId} を削除しました`);
   }
 
   function updateNodeDeviceType(nodeId: string, deviceType: NodeDeviceType) {
@@ -814,15 +938,15 @@ function App() {
     setStatus(`${ruleId} を削除しました`);
   }
 
-  function addLink() {
-    if (!newLinkFrom || !newLinkTo || newLinkFrom === newLinkTo) {
+  function createLinkBetweenNodes(fromNodeId: string, toNodeId: string, cost = newLinkCost) {
+    if (!fromNodeId || !toNodeId || fromNodeId === toNodeId) {
       setStatus("異なる2つのノードを選んでください");
       return;
     }
 
-    const linkId = uniqueLinkId(graph, newLinkFrom, newLinkTo);
-    const fromInterface = interfaceForNewLinkEndpoint(graph, newLinkFrom, linkId);
-    const toInterface = interfaceForNewLinkEndpoint(graph, newLinkTo, linkId);
+    const linkId = uniqueLinkId(graph, fromNodeId, toNodeId);
+    const fromInterface = interfaceForNewLinkEndpoint(graph, fromNodeId, linkId);
+    const toInterface = interfaceForNewLinkEndpoint(graph, toNodeId, linkId);
     if (!fromInterface || !toInterface) {
       setStatus("Client は1ポートのみ接続できます");
       return;
@@ -833,8 +957,8 @@ function App() {
       interfaces: [
         ...graph.interfaces,
         ...[
-          { id: fromInterface, node_id: newLinkFrom },
-          { id: toInterface, node_id: newLinkTo },
+          { id: fromInterface, node_id: fromNodeId },
+          { id: toInterface, node_id: toNodeId },
         ].filter((interfaceItem) => !existingInterfaceIds.has(interfaceItem.id)),
       ],
       links: [
@@ -843,7 +967,7 @@ function App() {
           id: linkId,
           from_interface: fromInterface,
           to_interface: toInterface,
-          cost: Math.max(1, newLinkCost),
+          cost: Math.max(1, cost),
           active: true,
         },
       ],
@@ -853,6 +977,10 @@ function App() {
     setActiveModal("link");
     setStatus(`${linkId} を追加しました`);
     void calculateRoute(applyRuntimeState(nextGraph, downNodeIds, downInterfaceIds), fromInterface, toInterface);
+  }
+
+  function addLink() {
+    createLinkBetweenNodes(newLinkFrom, newLinkTo);
   }
 
   function selectNode(nodeId: string) {
@@ -927,13 +1055,13 @@ function App() {
     <div className="border-t border-zinc-200 bg-zinc-100/70">
       <div className="flex flex-wrap items-center justify-between gap-2 border-b border-zinc-200 bg-white px-4 py-3">
         <div>
-          <h3 className="text-sm font-semibold text-zinc-950">トポロジ操作</h3>
-          <p className="mt-1 text-xs text-zinc-500">編集、読み込み、Exportをここで扱います。</p>
+          <h3 className="text-sm font-semibold text-zinc-950">構成編集</h3>
+          <p className="mt-1 text-xs text-zinc-500">ノードやリンクの追加、削除、設定変更は構成編集から行います。トポロジ上では選択と確認を行えます。</p>
         </div>
         <div className="flex flex-wrap gap-2">
           <button className={buttonClass("secondary")} type="button" onClick={() => setActiveModal("graph")}>
             <Network size={16} />
-            トポロジを編集
+            構成編集
           </button>
           <label className={buttonClass("secondary")}>
             <FileJson size={16} />
@@ -958,7 +1086,7 @@ function App() {
         </span>
         <span className="inline-flex items-center gap-2">
           <span className="h-1.5 w-8 rounded-full bg-red-500" />
-          ループ
+          問題箇所
         </span>
         <span className="inline-flex items-center gap-2">
           <span className="h-1.5 w-8 rounded-full border border-dashed border-zinc-400" />
@@ -978,7 +1106,7 @@ function App() {
         layout={layout}
         interfaceDisplayMode={interfaceDisplayMode}
         routeEdgeDirections={displayRouteEdgeDirections}
-        loopLinkIds={displayLoopLinkIds}
+        problemLinkIds={displayProblemLinkIds}
         routeInterfaceIds={displayRouteInterfaceIds}
         routeNodeIds={displayRouteNodeIds}
         fromInterface={fromInterface}
@@ -1098,10 +1226,6 @@ function App() {
     </details>
   );
 
-  function toggleRuleSection(section: keyof typeof openRuleSections) {
-    setOpenRuleSections((current) => ({ ...current, [section]: !current[section] }));
-  }
-
   function jumpToDiagnosisTarget() {
     const targetNodeId = routeDiagnosis.remediation.target.nodeId;
     if (targetNodeId) {
@@ -1113,49 +1237,18 @@ function App() {
 
     if (routeDiagnosis.remediation.target.type === "route") {
       setActiveView("rules");
-      setOpenRuleSections((current) => ({ ...current, routing: true }));
+      setActiveRuleTab("routing");
       return;
     }
     if (routeDiagnosis.remediation.target.type === "policy") {
       setActiveView("rules");
-      setOpenRuleSections((current) => ({ ...current, policy: true }));
+      setActiveRuleTab("policy");
       return;
     }
     if (routeDiagnosis.remediation.target.type === "nat") {
       setActiveView("rules");
-      setOpenRuleSections((current) => ({ ...current, nat: true }));
+      setActiveRuleTab("nat");
     }
-  }
-
-  function ruleSection({
-    id,
-    title,
-    summary,
-    children,
-  }: {
-    id: keyof typeof openRuleSections;
-    title: string;
-    summary: string;
-    children: ReactNode;
-  }) {
-    const open = openRuleSections[id];
-    return (
-      <Card className="overflow-hidden">
-        <button
-          className="flex w-full flex-wrap items-center justify-between gap-3 p-4 text-left hover:bg-zinc-50"
-          type="button"
-          onClick={() => toggleRuleSection(id)}
-          aria-expanded={open}
-        >
-          <div>
-            <h2 className="text-base font-semibold text-zinc-950">{title}</h2>
-            <p className="mt-1 text-sm text-zinc-500">{summary}</p>
-          </div>
-          <Badge tone={open ? "success" : "muted"}>{open ? "閉じる" : "開く"}</Badge>
-        </button>
-        {open ? <div className="border-t border-zinc-200">{children}</div> : null}
-      </Card>
-    );
   }
 
   return (
@@ -1238,24 +1331,36 @@ function App() {
           </section>
         ) : activeView === "rules" ? (
           <section className="grid gap-4">
-            {ruleSection({
-              id: "routing",
-              title: "Routing",
-              summary: `${routeEntriesFromGraph(graph).length} routes`,
-              children: <RoutingPanel graph={graph} onAddRoute={addRoute} onUpdateRoute={updateRoute} onDeleteRoute={deleteRoute} />,
-            })}
-            {ruleSection({
-              id: "policy",
-              title: "Policy",
-              summary: `${policyRulesFromGraph(graph).length} rules`,
-              children: <PolicyPanel graph={graph} onAddPolicy={addPolicy} onUpdatePolicy={updatePolicy} onDeletePolicy={deletePolicy} />,
-            })}
-            {ruleSection({
-              id: "nat",
-              title: "NAT",
-              summary: `${graph.nat_rules?.length ?? 0} rules`,
-              children: <NatPanel graph={graph} onAddNatRule={addNatRule} onUpdateNatRule={updateNatRule} onDeleteNatRule={deleteNatRule} />,
-            })}
+            <Card className="overflow-hidden">
+              <div className="border-b border-zinc-200 bg-white px-4 py-3">
+                <div className="flex flex-wrap gap-2">
+                  {[
+                    { id: "routing", label: "Routing", summary: `${routeEntriesFromGraph(graph).length} routes` },
+                    { id: "policy", label: "Policy", summary: `${policyRulesFromGraph(graph).length} rules` },
+                    { id: "nat", label: "NAT", summary: `${graph.nat_rules?.length ?? 0} rules` },
+                  ].map((tab) => (
+                    <button
+                      key={tab.id}
+                      className={buttonClass(activeRuleTab === tab.id ? "primary" : "secondary")}
+                      type="button"
+                      onClick={() => setActiveRuleTab(tab.id as typeof activeRuleTab)}
+                    >
+                      {tab.label}
+                      <Badge tone={activeRuleTab === tab.id ? "default" : "muted"}>{tab.summary}</Badge>
+                    </button>
+                  ))}
+                </div>
+              </div>
+              <div className="border-t border-zinc-200">
+                {activeRuleTab === "routing" ? (
+                  <RoutingPanel graph={graph} onAddRoute={addRoute} onUpdateRoute={updateRoute} onDeleteRoute={deleteRoute} />
+                ) : activeRuleTab === "policy" ? (
+                  <PolicyPanel graph={graph} onAddPolicy={addPolicy} onUpdatePolicy={updatePolicy} onDeletePolicy={deletePolicy} />
+                ) : (
+                  <NatPanel graph={graph} onAddNatRule={addNatRule} onUpdateNatRule={updateNatRule} onDeleteNatRule={deleteNatRule} />
+                )}
+              </div>
+            </Card>
           </section>
         ) : (
           <section className="grid gap-4">
@@ -1294,6 +1399,9 @@ function App() {
                 link={graph.links.find((link) => link.id === selectedLinkId)}
                 onToggle={toggleLink}
                 onUpdateLink={updateLinkFromTable}
+                onDelete={(linkId) => {
+                  deleteLink(linkId);
+                }}
               />
             ) : activeModal === "node" ? (
               <NodeDetailsPanel
@@ -1304,7 +1412,12 @@ function App() {
                 downNodeIds={downNodeIds}
                 downInterfaceIds={downInterfaceIds}
                 onToggleNode={toggleNodeStatus}
+                onDeleteNode={(nodeId) => {
+                  deleteNode(nodeId);
+                }}
+                onAddInterface={addInterface}
                 onToggleInterface={toggleInterfaceStatus}
+                onDeleteInterface={deleteInterface}
                 onUpdateNode={updateNode}
                 onUpdateInterface={updateInterface}
                 onSetEndpoint={setRouteEndpoint}
@@ -1356,6 +1469,7 @@ function App() {
                 onAddNode={addNode}
                 onAddGroup={addGroup}
                 onAddLink={addLink}
+                onDeleteNode={deleteNode}
                 onUpdateNodeDeviceType={updateNodeDeviceType}
                 onUpdateNodeGroup={updateNodeGroup}
                 selectedLinkId={selectedLinkId}
@@ -1364,6 +1478,7 @@ function App() {
                   setActiveModal("link");
                 }}
                 onUpdateLink={updateLinkFromTable}
+                onDeleteLink={deleteLink}
               />
             )}
           </Modal>

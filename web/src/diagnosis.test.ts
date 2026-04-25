@@ -1,7 +1,8 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { diagnoseRoute, scopeExpectationMatched } from "./diagnosis";
-import type { RouteResponse, TrafficIntent } from "./types";
+import { problemLinkIdsFromRoute } from "./graphModel";
+import type { GraphModel, RouteResponse, TrafficIntent } from "./types";
 
 function baseIntent(overrides?: Partial<TrafficIntent>): TrafficIntent {
   return {
@@ -133,4 +134,26 @@ test("diagnoseRoute uses NAT return assumption only when return failure lacks co
 
   assert.equal(diagnosis.designIssue.category, "NAT_RETURN_ASSUMPTION");
   assert.equal(diagnosis.designIssue.headline, "往復通信として未成立");
+});
+
+test("problemLinkIdsFromRoute does not mark links red for no_route responses", () => {
+  const graph: GraphModel = {
+    nodes: [{ id: "src" }, { id: "mid" }, { id: "dst" }],
+    interfaces: [
+      { id: "src-if", node_id: "src" },
+      { id: "mid-a", node_id: "mid" },
+      { id: "mid-b", node_id: "mid" },
+      { id: "dst-if", node_id: "dst" },
+    ],
+    links: [
+      { id: "src-mid", from_interface: "src-if", to_interface: "mid-a", cost: 1, active: true },
+      { id: "mid-dst", from_interface: "mid-b", to_interface: "dst-if", cost: 1, active: true },
+    ],
+  };
+  const response: Extract<RouteResponse, { ok: true }> = okResponse({
+    status: "no_route",
+    path: ["src-if", "mid-a", "mid-b", "dst-if"],
+  });
+
+  assert.deepEqual([...problemLinkIdsFromRoute(response, graph)], []);
 });

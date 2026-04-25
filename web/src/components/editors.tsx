@@ -15,7 +15,7 @@ import {
   routeEntriesFromGraph,
 } from "../graphModel";
 import { reachabilityScopeLabel, routeStatusLabel, testResultLabel } from "../formatters";
-import { actualReachabilityLabel, causeCodeLabel, causeTone, designIssueTone, diagnoseTrafficTest, endpointNameForIp, evaluationTone, factLabel, factTone, shortInterfaceLabel, trafficTestTitle } from "../diagnosis";
+import { actualReachabilityLabel, designIssueTone, diagnoseTrafficTest, endpointNameForIp, evaluationTone, factLabel, factTone, shortInterfaceLabel, trafficTestTitle } from "../diagnosis";
 import type {
   GraphModel,
   InterfaceModel,
@@ -117,11 +117,13 @@ export function SelectedLinkPanel({
   link,
   onToggle,
   onUpdateLink,
+  onDelete,
 }: {
   graph: GraphModel;
   link: LinkModel | undefined;
   onToggle: (linkId: string) => void;
   onUpdateLink: (linkId: string, patch: Partial<LinkModel>) => void;
+  onDelete: (linkId: string) => void;
 }) {
   if (!link) {
     return <EmptyMessage>トポロジまたは一覧からリンクを選んでください。</EmptyMessage>;
@@ -142,6 +144,11 @@ export function SelectedLinkPanel({
           onClick={() => onToggle(link.id)}
         >
           {link.active ? "稼働" : "停止"}
+        </button>
+      </div>
+      <div className="flex justify-end">
+        <button className={buttonClass("danger")} type="button" onClick={() => onDelete(link.id)}>
+          リンクを削除
         </button>
       </div>
       <Field label="帯域">
@@ -180,7 +187,10 @@ export function NodeDetailsPanel({
   downNodeIds,
   downInterfaceIds,
   onToggleNode,
+  onDeleteNode,
+  onAddInterface,
   onToggleInterface,
+  onDeleteInterface,
   onUpdateNode,
   onUpdateInterface,
   onSetEndpoint,
@@ -202,7 +212,10 @@ export function NodeDetailsPanel({
   downNodeIds: Set<string>;
   downInterfaceIds: Set<string>;
   onToggleNode: (nodeId: string) => void;
+  onDeleteNode: (nodeId: string) => void;
+  onAddInterface: (nodeId: string) => void;
   onToggleInterface: (interfaceId: string) => void;
+  onDeleteInterface: (interfaceId: string) => void;
   onUpdateNode: (nodeId: string, patch: Partial<NodeModel>) => void;
   onUpdateInterface: (interfaceId: string, patch: Partial<InterfaceModel>) => void;
   onSetEndpoint: (target: "from" | "to", interfaceId: string) => void;
@@ -257,13 +270,18 @@ export function NodeDetailsPanel({
             <Badge>{groupLabel(graph, nodeGroupId(node))}</Badge>
             <Badge tone={nodeDown ? "danger" : "success"}>{nodeDown ? "down" : "up"}</Badge>
           </div>
-          <button
-            className={buttonClass(nodeDown ? "success" : "danger")}
-            type="button"
-            onClick={() => onToggleNode(node.id)}
-          >
-            {nodeDown ? "ノードを復旧" : "ノードを停止"}
-          </button>
+          <div className="flex flex-wrap gap-2">
+            <button
+              className={buttonClass(nodeDown ? "success" : "danger")}
+              type="button"
+              onClick={() => onToggleNode(node.id)}
+            >
+              {nodeDown ? "ノードを復旧" : "ノードを停止"}
+            </button>
+            <button className={buttonClass("danger")} type="button" onClick={() => onDeleteNode(node.id)}>
+              ノードを削除
+            </button>
+          </div>
         </div>
         <div className="grid gap-1 text-sm text-zinc-600">
           <div>インターフェース: {interfaces.length}</div>
@@ -644,9 +662,30 @@ export function NodeDetailsPanel({
       </div>
 
       <div className="grid gap-2">
-        <h3 className="text-sm font-semibold text-zinc-950">インターフェース</h3>
+        <div className="flex items-center justify-between gap-3">
+          <div>
+            <h3 className="text-sm font-semibold text-zinc-950">インターフェース</h3>
+            <p className="mt-1 text-xs text-zinc-500">
+              {typeof capabilities.maxInterfaces === "number"
+                ? `最大 ${capabilities.maxInterfaces} ポートまで追加できます。`
+                : "必要に応じてポートを追加できます。"}
+            </p>
+          </div>
+          <button
+            className={buttonClass("secondary")}
+            disabled={typeof capabilities.maxInterfaces === "number" && interfaces.length >= capabilities.maxInterfaces}
+            type="button"
+            onClick={() => onAddInterface(node.id)}
+          >
+            インターフェース追加
+          </button>
+        </div>
         {interfaces.map((interfaceItem) => {
           const interfaceDown = nodeDown || downInterfaceIds.has(interfaceItem.id);
+          const canDeleteInterface =
+            interfaces.length > 1 || !connectedLinks.some(
+              (link) => link.from_interface === interfaceItem.id || link.to_interface === interfaceItem.id
+            );
           return (
             <div
               className="grid gap-3 rounded-lg border border-zinc-200 bg-white p-3"
@@ -715,6 +754,14 @@ export function NodeDetailsPanel({
                 >
                   終点にする
                 </button>
+                <button
+                  className={buttonClass("danger")}
+                  disabled={!canDeleteInterface}
+                  type="button"
+                  onClick={() => onDeleteInterface(interfaceItem.id)}
+                >
+                  インターフェース削除
+                </button>
               </div>
             </div>
           );
@@ -765,11 +812,13 @@ export function GraphEditor({
   onAddNode,
   onAddGroup,
   onAddLink,
+  onDeleteNode,
   onUpdateNodeDeviceType,
   onUpdateNodeGroup,
   selectedLinkId,
   onSelectLink,
   onUpdateLink,
+  onDeleteLink,
 }: {
   graph: GraphModel;
   newNodeId: string;
@@ -791,15 +840,20 @@ export function GraphEditor({
   onAddNode: () => void;
   onAddGroup: () => void;
   onAddLink: () => void;
+  onDeleteNode: (nodeId: string) => void;
   onUpdateNodeDeviceType: (nodeId: string, deviceType: NodeDeviceType) => void;
   onUpdateNodeGroup: (nodeId: string, groupId: string) => void;
   selectedLinkId: string;
   onSelectLink: (linkId: string) => void;
   onUpdateLink: (linkId: string, patch: Partial<LinkModel>) => void;
+  onDeleteLink: (linkId: string) => void;
 }) {
   const groups = graphGroups(graph);
   return (
     <div className="grid gap-4 p-4">
+      <div className="rounded-lg border border-zinc-200 bg-white px-3 py-2 text-xs text-zinc-600">
+        構成編集ではノードとリンクの追加・削除・設定変更を行います。配置変更やドラッグ接続はキャンバス編集で扱います。
+      </div>
       <div className="grid gap-3 rounded-lg border border-zinc-200 bg-zinc-50 p-3">
         <h3 className="text-sm font-semibold text-zinc-950">グループを追加</h3>
         <Field label="グループID">
@@ -889,7 +943,7 @@ export function GraphEditor({
       <div className="grid gap-2">
         <h3 className="text-sm font-semibold text-zinc-950">ノードの種別とグループ</h3>
         {graph.nodes.map((node) => (
-          <div className="grid grid-cols-[1fr_160px_130px] items-center gap-2" key={node.id}>
+          <div className="grid grid-cols-[1fr_160px_130px_auto] items-center gap-2" key={node.id}>
             <span className="truncate text-sm text-zinc-700">{node.id}</span>
             <NodeDeviceTypeSelect
               value={nodeDeviceType(node)}
@@ -900,6 +954,9 @@ export function GraphEditor({
               value={nodeGroupId(node)}
               onChange={(groupId) => onUpdateNodeGroup(node.id, groupId)}
             />
+            <button className={cn(buttonClass("danger"), "whitespace-nowrap")} type="button" onClick={() => onDeleteNode(node.id)}>
+              削除
+            </button>
           </div>
         ))}
       </div>
@@ -909,6 +966,7 @@ export function GraphEditor({
         selectedLinkId={selectedLinkId}
         onSelectLink={onSelectLink}
         onUpdateLink={onUpdateLink}
+        onDeleteLink={onDeleteLink}
       />
 
     </div>
@@ -920,11 +978,13 @@ export function LinksPanel({
   selectedLinkId,
   onSelectLink,
   onUpdateLink,
+  onDeleteLink,
 }: {
   graph: GraphModel;
   selectedLinkId: string;
   onSelectLink: (linkId: string) => void;
   onUpdateLink: (linkId: string, patch: Partial<LinkModel>) => void;
+  onDeleteLink: (linkId: string) => void;
 }) {
   const [nodeFilter, setNodeFilter] = useState("");
   const filteredLinks = graph.links.filter((link) =>
@@ -991,9 +1051,14 @@ export function LinksPanel({
                   />
                 </td>
                 <td className="whitespace-nowrap px-3 py-2">
+                  <div className="flex flex-wrap gap-2">
                     <button className={cn(buttonClass("secondary"), "whitespace-nowrap")} type="button" onClick={() => onSelectLink(link.id)}>
-                    詳細
-                  </button>
+                      詳細
+                    </button>
+                    <button className={cn(buttonClass("danger"), "whitespace-nowrap")} type="button" onClick={() => onDeleteLink(link.id)}>
+                      削除
+                    </button>
+                  </div>
                 </td>
               </tr>
             ))}
@@ -1057,10 +1122,10 @@ export function RoutingPanel({
               <div className="rounded-lg border border-zinc-200 bg-white p-3" key={node.id}>
                 <div className="flex flex-wrap items-center justify-between gap-2">
                   <div>
-                    <h4 className="text-sm font-semibold text-zinc-950">{node.id} のルーティング</h4>
+                    <h4 className="text-sm font-semibold text-zinc-950">{node.id}</h4>
                     <p className="mt-1 text-xs text-zinc-500">{nodeRoutes.filter((route) => route.active).length} active / {nodeRoutes.length} routes</p>
                   </div>
-                  <button className={buttonClass("secondary")} type="button" onClick={() => onAddRoute(node.id)}>このノードに追加</button>
+                  <button className={buttonClass("secondary")} type="button" onClick={() => onAddRoute(node.id)}>追加</button>
                 </div>
                 <div className="mt-3 grid gap-2">
                   {nodeRoutes.map((route) => (
@@ -1177,10 +1242,10 @@ export function PolicyPanel({
               <div className="rounded-lg border border-zinc-200 bg-white p-3" key={node.id}>
                 <div className="flex flex-wrap items-center justify-between gap-2">
                   <div>
-                    <h4 className="text-sm font-semibold text-zinc-950">{node.id} のPolicy</h4>
+                    <h4 className="text-sm font-semibold text-zinc-950">{node.id}</h4>
                     <p className="mt-1 text-xs text-zinc-500">{nodePolicies.filter((policy) => policy.active).length} active / {nodePolicies.length} rules</p>
                   </div>
-                  <button className={buttonClass("secondary")} type="button" onClick={() => onAddPolicy(node.id)}>このノードに追加</button>
+                  <button className={buttonClass("secondary")} type="button" onClick={() => onAddPolicy(node.id)}>追加</button>
                 </div>
                 <div className="mt-3 grid gap-2">
                   {nodePolicies.map((policy) => (
@@ -1317,10 +1382,10 @@ export function NatPanel({
               <div className="rounded-lg border border-zinc-200 bg-white p-3" key={node.id}>
                 <div className="flex flex-wrap items-center justify-between gap-2">
                   <div>
-                    <h4 className="text-sm font-semibold text-zinc-950">{node.id} のNAT</h4>
+                    <h4 className="text-sm font-semibold text-zinc-950">{node.id}</h4>
                     <p className="mt-1 text-xs text-zinc-500">{nodeRules.filter((rule) => rule.active).length} active / {nodeRules.length} rules</p>
                   </div>
-                  <button className={buttonClass("secondary")} type="button" onClick={() => onAddNatRule(node.id)}>このノードに追加</button>
+                  <button className={buttonClass("secondary")} type="button" onClick={() => onAddNatRule(node.id)}>追加</button>
                 </div>
                 <div className="mt-3 grid gap-2">
                   {nodeRules.map((rule) => (
@@ -1524,7 +1589,7 @@ export function TrafficTestsPanel({
           </div>
           <div className="max-h-[620px] overflow-auto rounded-lg border border-zinc-200 bg-white">
             {visibleTests.length ? (
-              <div className="min-w-[980px] divide-y divide-zinc-100">
+              <div className="min-w-[840px] divide-y divide-zinc-100">
                 {visibleTests.map((test) => {
                   const result = results[test.id];
                   const diagnosis = diagnoseTrafficTest(graph, result, test);
@@ -1534,7 +1599,7 @@ export function TrafficTestsPanel({
                   return (
                     <div
                       className={cn(
-                        "grid w-full grid-cols-[92px_minmax(220px,1fr)_96px_112px_112px_132px_132px] items-center gap-3 px-3 py-2 text-left transition hover:bg-zinc-50",
+                        "grid w-full grid-cols-[92px_minmax(220px,1fr)_96px_132px_132px] items-center gap-3 px-3 py-2 text-left transition hover:bg-zinc-50",
                         selected && "bg-teal-50",
                         result?.status === "fail" && "bg-red-50/50",
                         result?.status === "error" && "bg-red-50/50"
@@ -1556,15 +1621,12 @@ export function TrafficTestsPanel({
                       <div className="min-w-0">
                         <div className="truncate text-sm font-semibold text-zinc-950">{test.name || test.id}</div>
                         <div className="truncate font-mono text-xs text-zinc-500">{test.source} {"->"} {test.destination}</div>
+                        {!endpointsExist ? (
+                          <div className="truncate text-xs font-semibold text-red-700">endpoint を解決できません</div>
+                        ) : null}
                       </div>
                       <div className="text-xs font-semibold text-zinc-700">{protocol}</div>
-                      <div><Badge tone={test.expectations.reachable ? "success" : "danger"}>{test.expectations.reachable ? "期待OK" : "期待NG"}</Badge></div>
                       <div><Badge tone={factTone(diagnosis.facts.e2e)}>{actualReachabilityLabel(diagnosis)}</Badge></div>
-                      <div className="min-w-0">
-                        <Badge tone={endpointsExist ? designIssueTone(diagnosis.designIssue.severity) : "danger"}>
-                          {endpointsExist ? diagnosis.designIssue.headline : "UNKNOWN_IP"}
-                        </Badge>
-                      </div>
                       <div className="flex justify-end gap-2">
                         <button
                           className={buttonClass("success")}
